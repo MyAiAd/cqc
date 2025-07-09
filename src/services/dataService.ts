@@ -449,6 +449,29 @@ export const updatePractice = async (practiceId: string, updates: {
   return data;
 };
 
+// DEBUG: Check what practices exist in the database
+export const debugPractices = async () => {
+  console.log('=== DEBUGGING PRACTICES IN DATABASE ===');
+  
+  const { data: practices, error } = await supabase
+    .from('practices')
+    .select('*')
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching practices:', error);
+    return;
+  }
+
+  console.log('Total practices found:', practices?.length || 0);
+  console.log('Practices in database:');
+  practices?.forEach((practice, index) => {
+    console.log(`${index + 1}. ${practice.name} (${practice.email_domain}) - ${practice.subscription_tier} - ID: ${practice.id}`);
+  });
+  
+  return practices;
+};
+
 export const createUser = async (userData: {
   email: string;
   name: string;
