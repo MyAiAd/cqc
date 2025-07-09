@@ -162,14 +162,20 @@ export const getStaff = async (): Promise<Staff[]> => {
   })) || [];
 };
 
-export const createStaff = async (staffData: Omit<Staff, 'id'>): Promise<Staff | null> => {
-  const practiceId = await getCurrentPracticeId();
-  if (!practiceId) return null;
+export const createStaff = async (staffData: Omit<Staff, 'id'>, practice_id?: string): Promise<Staff | null> => {
+  // Use provided practice_id (for super admin) or get current user's practice_id
+  let targetPracticeId = practice_id;
+  
+  if (!targetPracticeId) {
+    const currentPracticeId = await getCurrentPracticeId();
+    if (!currentPracticeId) return null;
+    targetPracticeId = currentPracticeId;
+  }
 
   const { data: staff, error } = await supabase
     .from('staff')
     .insert({
-      practice_id: practiceId,
+      practice_id: targetPracticeId,
       name: staffData.name,
       email: staffData.email,
       role: staffData.role,

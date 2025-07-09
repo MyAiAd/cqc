@@ -5,51 +5,30 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { getStaff, createStaff } from '../services/dataService';
+import { getStaff, createStaff, getAllPractices } from '../services/dataService';
 import { Staff as StaffType } from '../types';
 
 type SortField = 'name' | 'role' | 'department' | 'email';
-type SortDirection = 'asc' | 'desc';
 
 interface SortState {
   field: SortField | null;
-  direction: SortDirection;
+  direction: 'asc' | 'desc';
 }
 
-interface SortableHeaderProps {
-  children: React.ReactNode;
-  field: SortField;
-  currentSort: SortState;
-  onSort: (field: SortField) => void;
-  className?: string;
+interface Practice {
+  id: string;
+  name: string;
+  email_domain: string;
+  subscription_tier: 'free' | 'basic' | 'premium';
+  created_at: string;
+  updated_at: string;
 }
-
-const SortableHeader: React.FC<SortableHeaderProps> = ({ 
-  children, 
-  field, 
-  currentSort, 
-  onSort, 
-  className = '' 
-}) => {
-  const isActive = currentSort.field === field;
-  
-  return (
-    <TableHeaderCell 
-      className={className}
-      isSortable={true}
-      isSorted={isActive}
-      isSortedDesc={isActive && currentSort.direction === 'desc'}
-      onSort={() => onSort(field)}
-    >
-      {children}
-    </TableHeaderCell>
-  );
-};
 
 export const Staff: React.FC = () => {
   const { userProfile } = useAuth();
   const { canAddStaff, refreshSubscription } = useSubscription();
   const [staff, setStaff] = useState<StaffType[]>([]);
+  const [practices, setPractices] = useState<Practice[]>([]);
   const [loading, setLoading] = useState(true);
   const [canCreateStaff, setCanCreateStaff] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -60,7 +39,8 @@ export const Staff: React.FC = () => {
     name: '',
     email: '',
     role: '',
-    department: ''
+    department: '',
+    practice_id: userProfile?.practice_id || ''
   });
 
   const handleSort = (field: SortField) => {
@@ -115,6 +95,7 @@ export const Staff: React.FC = () => {
   useEffect(() => {
     loadStaff();
     checkStaffLimit();
+    loadPractices();
   }, [userProfile]);
 
   const loadStaff = async () => {
@@ -127,6 +108,18 @@ export const Staff: React.FC = () => {
       setError('Failed to load staff members');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPractices = async () => {
+    // Only load practices if user is super admin
+    if (userProfile?.role === 'super_admin') {
+      try {
+        const practicesData = await getAllPractices();
+        setPractices(practicesData);
+      } catch (error) {
+        console.error('Error loading practices:', error);
+      }
     }
   };
 
@@ -159,12 +152,28 @@ export const Staff: React.FC = () => {
         return;
       }
 
+      // For super admin, validate practice selection
+      if (userProfile?.role === 'super_admin' && !newStaff.practice_id) {
+        setError('Please select a practice.');
+        return;
+      }
+
+      // Determine target practice ID
+      const targetPracticeId = userProfile?.role === 'super_admin' 
+        ? newStaff.practice_id 
+        : userProfile?.practice_id;
+
+      if (!targetPracticeId) {
+        setError('Unable to determine practice. Please try again.');
+        return;
+      }
+
       const createdStaff = await createStaff({
         name: newStaff.name.trim(),
         email: newStaff.email.trim() || undefined,
         role: newStaff.role.trim() || undefined,
         department: newStaff.department.trim() || undefined,
-      });
+      }, targetPracticeId);
 
       if (createdStaff) {
         // Refresh the staff list
@@ -181,7 +190,8 @@ export const Staff: React.FC = () => {
           name: '',
           email: '',
           role: '',
-          department: ''
+          department: '',
+          practice_id: userProfile?.practice_id || ''
         });
         setShowCreateModal(false);
       }
@@ -199,9 +209,18 @@ export const Staff: React.FC = () => {
       name: '',
       email: '',
       role: '',
-      department: ''
+      department: '',
+      practice_id: userProfile?.practice_id || ''
     });
     setError(null);
+  };
+
+  // Get current practice name for display
+  const getCurrentPracticeName = () => {
+    if (userProfile?.role === 'super_admin') {
+      return 'Select Practice';
+    }
+    return userProfile?.practice?.name || 'Current Practice';
   };
 
   if (loading) {
@@ -260,38 +279,38 @@ export const Staff: React.FC = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <SortableHeader
-                    field="name"
-                    currentSort={sortState}
-                    onSort={handleSort}
+                  <TableHeaderCell 
+                    isSortable 
+                    isSorted={sortState.field === 'name'}
+                    isSortedDesc={sortState.field === 'name' && sortState.direction === 'desc'}
+                    onSort={() => handleSort('name')}
                   >
                     Name
-                  </SortableHeader>
-                  
-                  <SortableHeader
-                    field="role"
-                    currentSort={sortState}
-                    onSort={handleSort}
+                  </TableHeaderCell>
+                  <TableHeaderCell 
+                    isSortable 
+                    isSorted={sortState.field === 'role'}
+                    isSortedDesc={sortState.field === 'role' && sortState.direction === 'desc'}
+                    onSort={() => handleSort('role')}
                   >
                     Role
-                  </SortableHeader>
-                  
-                  <SortableHeader
-                    field="department"
-                    currentSort={sortState}
-                    onSort={handleSort}
+                  </TableHeaderCell>
+                  <TableHeaderCell 
+                    isSortable 
+                    isSorted={sortState.field === 'department'}
+                    isSortedDesc={sortState.field === 'department' && sortState.direction === 'desc'}
+                    onSort={() => handleSort('department')}
                   >
                     Department
-                  </SortableHeader>
-                  
-                  <SortableHeader
-                    field="email"
-                    currentSort={sortState}
-                    onSort={handleSort}
+                  </TableHeaderCell>
+                  <TableHeaderCell 
+                    isSortable 
+                    isSorted={sortState.field === 'email'}
+                    isSortedDesc={sortState.field === 'email' && sortState.direction === 'desc'}
+                    onSort={() => handleSort('email')}
                   >
                     Email
-                  </SortableHeader>
-                  
+                  </TableHeaderCell>
                   <TableHeaderCell>Actions</TableHeaderCell>
                 </TableRow>
               </TableHead>
@@ -407,6 +426,38 @@ export const Staff: React.FC = () => {
                 />
               </div>
 
+              {/* Practice Name Field */}
+              <div>
+                <label htmlFor="practice" className="block text-sm font-medium text-gray-700 mb-1">
+                  Practice Name {userProfile?.role === 'super_admin' ? '*' : ''}
+                </label>
+                {userProfile?.role === 'super_admin' ? (
+                  <select
+                    id="practice"
+                    value={newStaff.practice_id}
+                    onChange={(e) => setNewStaff(prev => ({ ...prev, practice_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    required
+                  >
+                    <option value="">Select a practice</option>
+                    {practices.map(practice => (
+                      <option key={practice.id} value={practice.id}>
+                        {practice.name} ({practice.email_domain})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    id="practice"
+                    value={getCurrentPracticeName()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
+                    readOnly
+                    disabled
+                  />
+                )}
+              </div>
+
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-800 text-sm">{error}</p>
@@ -415,7 +466,7 @@ export const Staff: React.FC = () => {
 
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                 <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> This will add a staff member to your practice directory for task assignments and competency tracking.
+                  <strong>Note:</strong> This will add a staff member to {userProfile?.role === 'super_admin' ? 'the selected practice' : 'your practice'} directory for task assignments and competency tracking.
                 </p>
               </div>
 
