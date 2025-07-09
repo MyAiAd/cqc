@@ -25,6 +25,7 @@ import { EvidenceViewModal } from '../components/evidence/EvidenceViewModal';
 import { EvidenceCommentModal } from '../components/evidence/EvidenceCommentModal';
 import { useAuth } from '../contexts/AuthContext';
 import { policyService } from '../services/policyService';
+import { evidenceService } from '../services/evidenceService';
 import { 
   PolicyItem, 
   PolicyStats, 
@@ -166,21 +167,48 @@ export const SOPs: React.FC = () => {
       try {
         setLoading(true);
         
-        // Filter to only get SOPs
+        // Filter to get evidence with SOP-related evidence types or specific policy types
         const sopFilters = {
-          policy_type: ['sop'] as PolicyType[]
+          // Use evidence_type filtering instead of policy_type since there's no 'sop' evidence type
+          evidence_type: ['document', 'procedure'] as any[]
         };
         
-        const [policiesResult, statsResult] = await Promise.all([
-          policyService.getPolicies(sopFilters),
+        const [evidenceResult, statsResult] = await Promise.all([
+          evidenceService.getEvidenceItems(sopFilters),
           policyService.getPolicyStats()
         ]);
         
-        setUnsortedPolicies(policiesResult.policies);
+        // Filter for items that are tagged as SOPs or have SOP in title/description
+        const sopItems = evidenceResult.items.filter(item => 
+          item.title.toLowerCase().includes('sop') || 
+          item.title.toLowerCase().includes('standard operating') ||
+          item.description?.toLowerCase().includes('sop') ||
+          item.description?.toLowerCase().includes('standard operating') ||
+          item.tags?.some(tag => tag.toLowerCase().includes('sop'))
+        ).map(item => ({
+          ...item,
+          // Map to policy item format
+          evidence_type: (item.evidence_type === 'procedure' ? 'procedure' : 'policy') as 'policy' | 'procedure',
+          policy_type: 'sop' as PolicyType,
+          policy_category: ((item as any).policy_category || 'other') as PolicyCategory,
+          version: (item as any).version || '1.0',
+          effective_date: item.evidence_date || item.created_at,
+          review_frequency: ((item as any).review_frequency || 'annually') as any,
+          next_review_date: item.next_review_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+          approved_by: (item as any).approved_by,
+          approval_date: (item as any).approval_date,
+          supersedes: (item as any).supersedes,
+          related_policies: (item as any).related_policies || [],
+          training_required: (item as any).training_required || false,
+          mandatory_reading: (item as any).mandatory_reading || false,
+          distribution_list: (item as any).distribution_list || []
+        }));
+        
+        setUnsortedPolicies(sopItems as PolicyItem[]);
         setStats(statsResult);
       } catch (error) {
         console.error('Error loading SOP data:', error);
-        setPolicies([]);
+        setUnsortedPolicies([]);
         setStats({
           total_policies: 0,
           by_status: { pending: 0, submitted: 0, approved: 0, rejected: 0, expired: 0, under_review: 0 },
@@ -208,18 +236,44 @@ export const SOPs: React.FC = () => {
     try {
       setLoading(true);
       
-      // Add SOP type filter
+      // Use evidence_type filtering for SOPs
       const combinedFilters = {
         ...filters,
-        policy_type: ['sop'] as PolicyType[]
+        evidence_type: ['document', 'procedure'] as any[]
       };
       
-      const [policiesResult, statsResult] = await Promise.all([
-        policyService.getPolicies(combinedFilters),
+      const [evidenceResult, statsResult] = await Promise.all([
+        evidenceService.getEvidenceItems(combinedFilters),
         policyService.getPolicyStats()
       ]);
       
-      setUnsortedPolicies(policiesResult.policies);
+      // Filter for items that are tagged as SOPs or have SOP in title/description
+      const sopItems = evidenceResult.items.filter(item => 
+        item.title.toLowerCase().includes('sop') || 
+        item.title.toLowerCase().includes('standard operating') ||
+        item.description?.toLowerCase().includes('sop') ||
+        item.description?.toLowerCase().includes('standard operating') ||
+        item.tags?.some(tag => tag.toLowerCase().includes('sop'))
+      ).map(item => ({
+        ...item,
+        // Map to policy item format
+        evidence_type: (item.evidence_type === 'procedure' ? 'procedure' : 'policy') as 'policy' | 'procedure',
+        policy_type: 'sop' as PolicyType,
+        policy_category: ((item as any).policy_category || 'other') as PolicyCategory,
+        version: (item as any).version || '1.0',
+        effective_date: item.evidence_date || item.created_at,
+        review_frequency: ((item as any).review_frequency || 'annually') as any,
+        next_review_date: item.next_review_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+        approved_by: (item as any).approved_by,
+        approval_date: (item as any).approval_date,
+        supersedes: (item as any).supersedes,
+        related_policies: (item as any).related_policies || [],
+        training_required: (item as any).training_required || false,
+        mandatory_reading: (item as any).mandatory_reading || false,
+        distribution_list: (item as any).distribution_list || []
+      }));
+      
+      setUnsortedPolicies(sopItems as PolicyItem[]);
       setStats(statsResult);
     } catch (error) {
       console.error('Error loading SOP data:', error);
@@ -232,17 +286,44 @@ export const SOPs: React.FC = () => {
     try {
       setLoading(true);
       
-      // Add SOP type filter
+      // Use evidence_type filtering for SOPs
       const combinedFilters = {
         ...filters,
-        policy_type: ['sop'] as PolicyType[]
+        evidence_type: ['document', 'procedure'] as any[]
       };
       
-      const [policiesResult, statsResult] = await Promise.all([
-        policyService.getPolicies(combinedFilters),
+      const [evidenceResult, statsResult] = await Promise.all([
+        evidenceService.getEvidenceItems(combinedFilters),
         policyService.getPolicyStats()
       ]);
-      setUnsortedPolicies(policiesResult.policies);
+      
+      // Filter for items that are tagged as SOPs or have SOP in title/description
+      const sopItems = evidenceResult.items.filter(item => 
+        item.title.toLowerCase().includes('sop') || 
+        item.title.toLowerCase().includes('standard operating') ||
+        item.description?.toLowerCase().includes('sop') ||
+        item.description?.toLowerCase().includes('standard operating') ||
+        item.tags?.some(tag => tag.toLowerCase().includes('sop'))
+      ).map(item => ({
+        ...item,
+        // Map to policy item format
+        evidence_type: (item.evidence_type === 'procedure' ? 'procedure' : 'policy') as 'policy' | 'procedure',
+        policy_type: 'sop' as PolicyType,
+        policy_category: ((item as any).policy_category || 'other') as PolicyCategory,
+        version: (item as any).version || '1.0',
+        effective_date: item.evidence_date || item.created_at,
+        review_frequency: ((item as any).review_frequency || 'annually') as any,
+        next_review_date: item.next_review_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+        approved_by: (item as any).approved_by,
+        approval_date: (item as any).approval_date,
+        supersedes: (item as any).supersedes,
+        related_policies: (item as any).related_policies || [],
+        training_required: (item as any).training_required || false,
+        mandatory_reading: (item as any).mandatory_reading || false,
+        distribution_list: (item as any).distribution_list || []
+      }));
+      
+      setUnsortedPolicies(sopItems as PolicyItem[]);
       setStats(statsResult);
     } catch (error) {
       console.error('Error refreshing SOP data:', error);
@@ -657,7 +738,7 @@ export const SOPs: React.FC = () => {
           refreshData();
           setShowUploadModal(false);
         }}
-        defaultEvidenceType="policy"
+        defaultEvidenceType="document"
       />
 
       {/* View Modal */}
@@ -679,7 +760,7 @@ export const SOPs: React.FC = () => {
             setShowEditModal(false);
           }}
           initialData={selectedPolicy}
-          defaultEvidenceType="policy"
+          defaultEvidenceType="document"
         />
       )}
 
