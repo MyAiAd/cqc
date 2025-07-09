@@ -355,6 +355,290 @@ export const createStaff = async (staffData: Omit<Staff, 'id'>, practice_id?: st
   }
 };
 
+export const updateStaff = async (staffId: string, staffData: Partial<Omit<Staff, 'id'>>, targetPracticeId?: string): Promise<Staff | null> => {
+  console.log('=== UPDATE STAFF SERVICE DEBUG START ===');
+  console.log('Staff ID to update:', staffId);
+  console.log('Update data:', staffData);
+  console.log('Target practice ID:', targetPracticeId);
+  
+  try {
+    // Get current user to check permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('ERROR: No authenticated user found');
+      return null;
+    }
+
+    console.log('Step 1: Checking user permissions...');
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('practice_id, role, email, name')
+      .eq('id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching user profile:', userError);
+      return null;
+    }
+
+    const isSuperAdmin = userProfile?.role === 'super_admin';
+    console.log('User profile:', userProfile);
+    console.log('Is super admin?', isSuperAdmin);
+
+    // Get the staff member to check permissions
+    console.log('Step 2: Fetching existing staff member...');
+    const { data: existingStaff, error: fetchError } = await supabase
+      .from('staff')
+      .select('*, practice:practices(id, name)')
+      .eq('id', staffId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching existing staff:', fetchError);
+      return null;
+    }
+
+    console.log('Existing staff:', existingStaff);
+
+    // Permission check
+    if (!isSuperAdmin && existingStaff.practice_id !== userProfile?.practice_id) {
+      console.log('ERROR: Permission denied - user can only edit staff from their practice');
+      throw new Error('Permission denied: You can only edit staff from your practice');
+    }
+
+    console.log('Step 3: Permission check passed');
+
+    // Prepare update data
+    const updateData: any = {};
+    if (staffData.name !== undefined) updateData.name = staffData.name;
+    if (staffData.email !== undefined) updateData.email = staffData.email;
+    if (staffData.role !== undefined) updateData.role = staffData.role;
+    if (staffData.department !== undefined) updateData.department = staffData.department;
+    
+    // If super admin is changing practice
+    if (isSuperAdmin && targetPracticeId && targetPracticeId !== existingStaff.practice_id) {
+      updateData.practice_id = targetPracticeId;
+      console.log('Super admin changing practice from', existingStaff.practice_id, 'to', targetPracticeId);
+    }
+
+    console.log('Step 4: Update data prepared:', updateData);
+
+    // Execute update
+    const { data: updatedStaff, error } = await supabase
+      .from('staff')
+      .update(updateData)
+      .eq('id', staffId)
+      .select(`
+        *,
+        practice:practices(id, name, email_domain)
+      `)
+      .single();
+
+    console.log('Step 5: Supabase update response...');
+    console.log('Updated staff data:', updatedStaff);
+    console.log('Update error:', error);
+
+    if (error) {
+      console.error('=== SUPABASE UPDATE ERROR ===');
+      console.error('Error details:', error);
+      return null;
+    }
+
+    // Transform result
+    const result = {
+      id: updatedStaff.id,
+      name: updatedStaff.name,
+      email: updatedStaff.email,
+      role: updatedStaff.role,
+      department: updatedStaff.department,
+      // Include practice info for super admin
+      ...(isSuperAdmin && updatedStaff.practice ? {
+        practiceName: updatedStaff.practice.name,
+        practiceId: updatedStaff.practice.id
+      } : {})
+    };
+
+    console.log('Final result:', result);
+    console.log('=== UPDATE STAFF SERVICE SUCCESS ===');
+    return result;
+
+  } catch (error) {
+    console.error('=== UPDATE STAFF SERVICE ERROR ===');
+    console.error('Error details:', error);
+    throw error;
+  }
+};
+
+export const deleteStaff = async (staffId: string): Promise<boolean> => {
+  console.log('=== DELETE STAFF SERVICE DEBUG START ===');
+  console.log('Staff ID to delete:', staffId);
+  
+  try {
+    // Get current user to check permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('ERROR: No authenticated user found');
+      return false;
+    }
+
+    console.log('Step 1: Checking user permissions...');
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('practice_id, role, email, name')
+      .eq('id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching user profile:', userError);
+      return false;
+    }
+
+    const isSuperAdmin = userProfile?.role === 'super_admin';
+    console.log('User profile:', userProfile);
+    console.log('Is super admin?', isSuperAdmin);
+
+    // Get the staff member to check permissions
+    console.log('Step 2: Fetching existing staff member...');
+    const { data: existingStaff, error: fetchError } = await supabase
+      .from('staff')
+      .select('*, practice:practices(id, name)')
+      .eq('id', staffId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching existing staff:', fetchError);
+      return false;
+    }
+
+    console.log('Existing staff:', existingStaff);
+
+    // Permission check
+    if (!isSuperAdmin && existingStaff.practice_id !== userProfile?.practice_id) {
+      console.log('ERROR: Permission denied - user can only delete staff from their practice');
+      throw new Error('Permission denied: You can only delete staff from your practice');
+    }
+
+    console.log('Step 3: Permission check passed');
+
+    // Check if staff member has competencies (might want to handle this)
+    console.log('Step 4: Checking for related competencies...');
+    const { data: competencies } = await supabase
+      .from('competencies')
+      .select('id')
+      .eq('staff_id', staffId);
+
+    if (competencies && competencies.length > 0) {
+      console.log(`Found ${competencies.length} competencies for this staff member`);
+      // Delete related competencies first
+      const { error: competencyError } = await supabase
+        .from('competencies')
+        .delete()
+        .eq('staff_id', staffId);
+
+      if (competencyError) {
+        console.error('Error deleting related competencies:', competencyError);
+        return false;
+      }
+      console.log('Related competencies deleted successfully');
+    }
+
+    // Execute delete
+    console.log('Step 5: Deleting staff member...');
+    const { error } = await supabase
+      .from('staff')
+      .delete()
+      .eq('id', staffId);
+
+    console.log('Step 6: Delete response...');
+    console.log('Delete error:', error);
+
+    if (error) {
+      console.error('=== SUPABASE DELETE ERROR ===');
+      console.error('Error details:', error);
+      return false;
+    }
+
+    console.log('=== DELETE STAFF SERVICE SUCCESS ===');
+    return true;
+
+  } catch (error) {
+    console.error('=== DELETE STAFF SERVICE ERROR ===');
+    console.error('Error details:', error);
+    throw error;
+  }
+};
+
+export const getStaffById = async (staffId: string): Promise<Staff | null> => {
+  console.log('=== GET STAFF BY ID DEBUG START ===');
+  console.log('Staff ID:', staffId);
+  
+  try {
+    // Get current user to check permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('ERROR: No authenticated user found');
+      return null;
+    }
+
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('practice_id, role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching user profile:', userError);
+      return null;
+    }
+
+    const isSuperAdmin = userProfile?.role === 'super_admin';
+
+    // Fetch staff member with practice info
+    let query = supabase
+      .from('staff')
+      .select(`
+        *,
+        practice:practices(id, name, email_domain)
+      `)
+      .eq('id', staffId);
+
+    // Apply permission filter for non-super admins
+    if (!isSuperAdmin) {
+      query = query.eq('practice_id', userProfile?.practice_id);
+    }
+
+    const { data: staff, error } = await query.single();
+
+    if (error) {
+      console.error('Error fetching staff by ID:', error);
+      return null;
+    }
+
+    // Transform result
+    const result = {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      role: staff.role,
+      department: staff.department,
+      // Include practice info for super admin
+      ...(isSuperAdmin && staff.practice ? {
+        practiceName: staff.practice.name,
+        practiceId: staff.practice.id
+      } : {})
+    };
+
+    console.log('Staff member found:', result);
+    console.log('=== GET STAFF BY ID SUCCESS ===');
+    return result;
+
+  } catch (error) {
+    console.error('=== GET STAFF BY ID ERROR ===');
+    console.error('Error details:', error);
+    return null;
+  }
+};
+
 // Competencies
 export const updateCompetency = async (
   taskId: string, 

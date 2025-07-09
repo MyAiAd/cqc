@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { getStaff, createStaff, getAllPractices } from '../services/dataService';
+import { getStaff, createStaff, getAllPractices, updateStaff, deleteStaff, getStaffById } from '../services/dataService';
 import { Staff as StaffType } from '../types';
 
 type SortField = 'name' | 'role' | 'department' | 'email' | 'practiceName';
@@ -32,7 +32,13 @@ export const Staff: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [canCreateStaff, setCanCreateStaff] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffType | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortState, setSortState] = useState<SortState>({ field: null, direction: 'asc' });
   const [newStaff, setNewStaff] = useState({
@@ -41,6 +47,13 @@ export const Staff: React.FC = () => {
     role: '',
     department: '',
     practice_id: userProfile?.practice_id || ''
+  });
+  const [editStaff, setEditStaff] = useState({
+    name: '',
+    email: '',
+    role: '',
+    department: '',
+    practice_id: ''
   });
 
   const handleSort = (field: SortField) => {
@@ -268,6 +281,149 @@ export const Staff: React.FC = () => {
     setError(null);
   };
 
+  // Handle View Staff
+  const handleViewStaff = async (staffMember: StaffType) => {
+    try {
+      setSelectedStaff(staffMember);
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error viewing staff:', error);
+      setError('Failed to view staff member details');
+    }
+  };
+
+  // Handle Edit Staff
+  const handleEditStaff = async (staffMember: StaffType) => {
+    try {
+      // Get full staff details
+      const fullStaffDetails = await getStaffById(staffMember.id);
+      if (!fullStaffDetails) {
+        setError('Failed to load staff member details');
+        return;
+      }
+
+      setSelectedStaff(fullStaffDetails);
+      setEditStaff({
+        name: fullStaffDetails.name,
+        email: fullStaffDetails.email || '',
+        role: fullStaffDetails.role || '',
+        department: fullStaffDetails.department || '',
+        practice_id: fullStaffDetails.practiceId || userProfile?.practice_id || ''
+      });
+      setShowEditModal(true);
+    } catch (error) {
+      console.error('Error preparing staff for edit:', error);
+      setError('Failed to load staff member details for editing');
+    }
+  };
+
+  // Handle Update Staff
+  const handleUpdateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedStaff) return;
+
+    try {
+      setIsUpdating(true);
+      setError(null);
+
+      // Validate required fields
+      if (!editStaff.name.trim()) {
+        setError('Please enter a staff member name.');
+        return;
+      }
+
+      // For super admin, validate practice selection
+      if (userProfile?.role === 'super_admin' && !editStaff.practice_id) {
+        setError('Please select a practice.');
+        return;
+      }
+
+      const staffDataToUpdate = {
+        name: editStaff.name.trim(),
+        email: editStaff.email.trim() || undefined,
+        role: editStaff.role.trim() || undefined,
+        department: editStaff.department.trim() || undefined,
+      };
+
+      const targetPracticeId = userProfile?.role === 'super_admin' 
+        ? editStaff.practice_id 
+        : undefined;
+
+      const updatedStaff = await updateStaff(selectedStaff.id, staffDataToUpdate, targetPracticeId);
+
+      if (updatedStaff) {
+        await loadStaff();
+        setShowEditModal(false);
+        setSelectedStaff(null);
+        setError(null);
+      } else {
+        setError('Failed to update staff member.');
+      }
+    } catch (error) {
+      console.error('Error updating staff:', error);
+      setError(`Error updating staff member: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Handle Delete Staff
+  const handleDeleteStaff = (staffMember: StaffType) => {
+    setSelectedStaff(staffMember);
+    setShowDeleteModal(true);
+  };
+
+  // Handle Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (!selectedStaff) return;
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const success = await deleteStaff(selectedStaff.id);
+
+      if (success) {
+        await loadStaff();
+        setShowDeleteModal(false);
+        setSelectedStaff(null);
+        setError(null);
+      } else {
+        setError('Failed to delete staff member.');
+      }
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      setError(`Error deleting staff member: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Reset all modals
+  const resetAllModals = () => {
+    setShowCreateModal(false);
+    setShowViewModal(false);
+    setShowEditModal(false);
+    setShowDeleteModal(false);
+    setSelectedStaff(null);
+    setNewStaff({
+      name: '',
+      email: '',
+      role: '',
+      department: '',
+      practice_id: userProfile?.practice_id || ''
+    });
+    setEditStaff({
+      name: '',
+      email: '',
+      role: '',
+      department: '',
+      practice_id: ''
+    });
+    setError(null);
+  };
+
   // Get current practice name for display
   const getCurrentPracticeName = () => {
     if (userProfile?.role === 'super_admin') {
@@ -399,6 +555,7 @@ export const Staff: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           title="View Details"
+                          onClick={() => handleViewStaff(member)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -406,6 +563,7 @@ export const Staff: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           title="Edit Staff Member"
+                          onClick={() => handleEditStaff(member)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -413,6 +571,7 @@ export const Staff: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           title="Delete Staff Member"
+                          onClick={() => handleDeleteStaff(member)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -558,6 +717,245 @@ export const Staff: React.FC = () => {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Staff Modal */}
+      {showViewModal && selectedStaff && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Staff Member Details</h3>
+              <button
+                onClick={resetAllModals}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <p className="text-gray-900">{selectedStaff.name}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <p className="text-gray-900">{selectedStaff.email || 'Not provided'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <p className="text-gray-900">{selectedStaff.role || 'Not specified'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <p className="text-gray-900">{selectedStaff.department || 'Not specified'}</p>
+              </div>
+
+              {userProfile?.role === 'super_admin' && selectedStaff.practiceName && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Practice</label>
+                  <p className="text-gray-900">{selectedStaff.practiceName}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetAllModals}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowViewModal(false);
+                    handleEditStaff(selectedStaff);
+                  }}
+                >
+                  Edit Staff Member
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Modal */}
+      {showEditModal && selectedStaff && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Staff Member</h3>
+              <button
+                onClick={resetAllModals}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateStaff} className="space-y-4">
+              <div>
+                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  id="edit-name"
+                  value={editStaff.name}
+                  onChange={(e) => setEditStaff(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="edit-email"
+                  value={editStaff.email}
+                  onChange={(e) => setEditStaff(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="user@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-role" className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <input
+                  type="text"
+                  id="edit-role"
+                  value={editStaff.role}
+                  onChange={(e) => setEditStaff(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="e.g., Nurse, Doctor, Admin"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-department" className="block text-sm font-medium text-gray-700 mb-1">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  id="edit-department"
+                  value={editStaff.department}
+                  onChange={(e) => setEditStaff(prev => ({ ...prev, department: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="e.g., Clinical, Administrative"
+                />
+              </div>
+
+              {/* Practice Name Field for Super Admin */}
+              {userProfile?.role === 'super_admin' && (
+                <div>
+                  <label htmlFor="edit-practice" className="block text-sm font-medium text-gray-700 mb-1">
+                    Practice Name *
+                  </label>
+                  <select
+                    id="edit-practice"
+                    value={editStaff.practice_id}
+                    onChange={(e) => setEditStaff(prev => ({ ...prev, practice_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    required
+                  >
+                    <option value="">Select a practice</option>
+                    {practices.map(practice => (
+                      <option key={practice.id} value={practice.id}>
+                        {practice.name} ({practice.email_domain})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-800 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetAllModals}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? 'Updating...' : 'Update Staff Member'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedStaff && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
+              <button
+                onClick={resetAllModals}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to delete <strong>{selectedStaff.name}</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-800">
+                  <strong>Warning:</strong> This action cannot be undone. This will permanently delete the staff member and all associated competency records.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <p className="text-red-800 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetAllModals}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Staff Member'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
