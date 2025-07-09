@@ -29,7 +29,7 @@ export const sampleTasks: Task[] = [
     category: 'Continuous' as TaskFrequency,
     sopLink: '[SOP Link]',
     policyLink: '[Policy Link]',
-    riskRating: 'Medium' as RiskRating,
+    riskRating: 'Medium-Low' as RiskRating,
     competencies: [
       { staffId: '1', staffName: 'Team Member 1', status: 'Competent' },
       { staffId: '2', staffName: 'Team Member 2', status: 'Training Required' },
@@ -63,7 +63,7 @@ export const sampleTasks: Task[] = [
     category: 'Continuous' as TaskFrequency,
     sopLink: '[SOP Link]',
     policyLink: '[Policy Link]',
-    riskRating: 'Medium' as RiskRating,
+    riskRating: 'Medium-High' as RiskRating,
     competencies: [
       { staffId: '1', staffName: 'Team Member 1', status: 'Competent' },
       { staffId: '2', staffName: 'Team Member 2', status: 'Re-Training Required' },

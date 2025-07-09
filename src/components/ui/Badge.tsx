@@ -39,7 +39,9 @@ interface RiskBadgeProps {
 export const RiskBadge: React.FC<RiskBadgeProps> = ({ risk, className = '' }) => {
   const riskColors = {
     Low: 'bg-success-100 text-success-800',
+    'Medium-Low': 'bg-green-100 text-green-800',
     Medium: 'bg-warning-100 text-warning-800',
+    'Medium-High': 'bg-orange-100 text-orange-800',
     High: 'bg-error-100 text-error-800',
   };
   

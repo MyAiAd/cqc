@@ -1,6 +1,6 @@
 export type TaskFrequency = 'Continuous' | 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly';
 
-export type RiskRating = 'Low' | 'Medium' | 'High';
+export type RiskRating = 'Low' | 'Medium-Low' | 'Medium' | 'Medium-High' | 'High';
 
 export type CompetencyStatus = 
   | 'Competent' 

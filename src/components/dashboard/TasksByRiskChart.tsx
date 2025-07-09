@@ -24,22 +24,26 @@ export const TasksByRiskChart: React.FC<TasksByRiskChartProps> = ({ tasks }) => 
       acc[task.riskRating]++;
       return acc;
     },
-    { Low: 0, Medium: 0, High: 0 }
+    { Low: 0, 'Medium-Low': 0, Medium: 0, 'Medium-High': 0, High: 0 }
   );
   
   const data: ChartData<'doughnut'> = {
-    labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+    labels: ['Low Risk', 'Medium-Low Risk', 'Medium Risk', 'Medium-High Risk', 'High Risk'],
     datasets: [
       {
-        data: [riskCounts.Low, riskCounts.Medium, riskCounts.High],
+        data: [riskCounts.Low, riskCounts['Medium-Low'], riskCounts.Medium, riskCounts['Medium-High'], riskCounts.High],
         backgroundColor: [
-          'rgba(34, 197, 94, 0.7)',  // Success/Green for Low
+          'rgba(34, 197, 94, 0.7)',   // Success/Green for Low
+          'rgba(74, 222, 128, 0.7)',  // Light Green for Medium-Low
           'rgba(245, 158, 11, 0.7)',  // Warning/Amber for Medium
+          'rgba(251, 146, 60, 0.7)',  // Orange for Medium-High
           'rgba(220, 38, 38, 0.7)',   // Error/Red for High
         ],
         borderColor: [
           'rgba(34, 197, 94, 1)',
+          'rgba(74, 222, 128, 1)',
           'rgba(245, 158, 11, 1)',
+          'rgba(251, 146, 60, 1)',
           'rgba(220, 38, 38, 1)',
         ],
         borderWidth: 1,

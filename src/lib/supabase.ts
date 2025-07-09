@@ -125,7 +125,7 @@ export interface Database {
           category: 'Continuous' | 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly'
           sop_link: string | null
           policy_link: string | null
-          risk_rating: 'Low' | 'Medium' | 'High'
+          risk_rating: 'Low' | 'Medium-Low' | 'Medium' | 'Medium-High' | 'High'
           owner: string | null
           created_at: string
           updated_at: string
@@ -138,7 +138,7 @@ export interface Database {
           category: 'Continuous' | 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly'
           sop_link?: string | null
           policy_link?: string | null
-          risk_rating?: 'Low' | 'Medium' | 'High'
+          risk_rating?: 'Low' | 'Medium-Low' | 'Medium' | 'Medium-High' | 'High'
           owner?: string | null
           created_at?: string
           updated_at?: string
@@ -151,7 +151,7 @@ export interface Database {
           category?: 'Continuous' | 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly'
           sop_link?: string | null
           policy_link?: string | null
-          risk_rating?: 'Low' | 'Medium' | 'High'
+          risk_rating?: 'Low' | 'Medium-Low' | 'Medium' | 'Medium-High' | 'High'
           owner?: string | null
           updated_at?: string
         }

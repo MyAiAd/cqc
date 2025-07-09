@@ -16,7 +16,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   onCancel,
 }) => {
   const frequencies: TaskFrequency[] = ['Continuous', 'Daily', 'Weekly', 'Monthly', 'Quarterly'];
-  const riskRatings: RiskRating[] = ['Low', 'Medium', 'High'];
+  const riskRatings: RiskRating[] = ['Low', 'Medium-Low', 'Medium', 'Medium-High', 'High'];
   
   const [formData, setFormData] = useState<Partial<Task>>(
     task || {
