@@ -172,6 +172,70 @@ export const Policies: React.FC = () => {
     );
   };
 
+  // Calculate stats from filtered policy items
+  const calculatePolicyStats = useCallback((policyItems: PolicyItem[]) => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+    return {
+      total_policies: policyItems.length,
+      by_status: {
+        pending: policyItems.filter(p => p.status === 'pending').length,
+        submitted: policyItems.filter(p => p.status === 'submitted').length,
+        approved: policyItems.filter(p => p.status === 'approved').length,
+        rejected: policyItems.filter(p => p.status === 'rejected').length,
+        expired: policyItems.filter(p => p.status === 'expired').length,
+        under_review: policyItems.filter(p => p.status === 'under_review').length
+      },
+      by_compliance: {
+        compliant: policyItems.filter(p => p.compliance_status === 'compliant').length,
+        partially_compliant: policyItems.filter(p => p.compliance_status === 'partially_compliant').length,
+        not_compliant: policyItems.filter(p => p.compliance_status === 'not_compliant').length,
+        not_applicable: policyItems.filter(p => p.compliance_status === 'not_applicable').length
+      },
+      by_type: {
+        policy: policyItems.filter(p => p.policy_type === 'policy').length,
+        procedure: policyItems.filter(p => p.policy_type === 'procedure').length,
+        sop: 0, // No SOPs in policies page
+        guideline: policyItems.filter(p => p.policy_type === 'guideline').length,
+        protocol: policyItems.filter(p => p.policy_type === 'protocol').length,
+        standard: policyItems.filter(p => p.policy_type === 'standard').length
+      },
+      by_category: {
+        clinical_governance: policyItems.filter(p => p.policy_category === 'clinical_governance').length,
+        safeguarding: policyItems.filter(p => p.policy_category === 'safeguarding').length,
+        infection_control: policyItems.filter(p => p.policy_category === 'infection_control').length,
+        health_safety: policyItems.filter(p => p.policy_category === 'health_safety').length,
+        data_protection: policyItems.filter(p => p.policy_category === 'data_protection').length,
+        hr_policies: policyItems.filter(p => p.policy_category === 'hr_policies').length,
+        quality_assurance: policyItems.filter(p => p.policy_category === 'quality_assurance').length,
+        emergency_procedures: policyItems.filter(p => p.policy_category === 'emergency_procedures').length,
+        medication_management: policyItems.filter(p => p.policy_category === 'medication_management').length,
+        patient_care: policyItems.filter(p => p.policy_category === 'patient_care').length,
+        staff_training: policyItems.filter(p => p.policy_category === 'staff_training').length,
+        other: policyItems.filter(p => p.policy_category === 'other').length
+      },
+      due_for_review: policyItems.filter(p => 
+        p.next_review_date && 
+        new Date(p.next_review_date) <= thirtyDaysFromNow &&
+        new Date(p.next_review_date) >= today
+      ).length,
+      overdue_reviews: policyItems.filter(p => 
+        p.next_review_date && 
+        new Date(p.next_review_date) < today
+      ).length,
+      pending_approvals: policyItems.filter(p => 
+        p.status === 'submitted' || p.status === 'under_review'
+      ).length,
+      recently_updated: policyItems.filter(p => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        return new Date(p.updated_at) >= thirtyDaysAgo;
+      }).length
+    };
+  }, []);
+
   useEffect(() => {
     console.log('=== POLICIES USEEFFECT TRIGGERED ===');
     const loadInitialData = async () => {
@@ -184,16 +248,13 @@ export const Policies: React.FC = () => {
           policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
         };
         
-        const [policiesResult, statsResult] = await Promise.all([
-          policyService.getPolicies(policyFilters),
-          policyService.getPolicyStats()
-        ]);
+        const policiesResult = await policyService.getPolicies(policyFilters);
         
         console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
         console.log('=== POLICIES DATA ===', policiesResult.policies);
         
         setUnsortedPolicies(policiesResult.policies);
-        setStats(statsResult);
+        setStats(calculatePolicyStats(policiesResult.policies));
       } catch (error) {
         console.error('=== ERROR LOADING POLICY DATA ===', error);
         setPolicies([]);
@@ -231,16 +292,13 @@ export const Policies: React.FC = () => {
         policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
       };
       
-      const [policiesResult, statsResult] = await Promise.all([
-        policyService.getPolicies(combinedFilters),
-        policyService.getPolicyStats()
-      ]);
+      const policiesResult = await policyService.getPolicies(combinedFilters);
       
       console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
       console.log('=== POLICIES DATA ===', policiesResult.policies);
       
       setUnsortedPolicies(policiesResult.policies);
-      setStats(statsResult);
+      setStats(calculatePolicyStats(policiesResult.policies));
     } catch (error) {
       console.error('=== ERROR LOADING POLICY DATA ===', error);
       setPolicies([]);
@@ -262,7 +320,7 @@ export const Policies: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]); // Removed applySortToPolicies dependency
+  }, [filters, calculatePolicyStats]);
 
   const refreshData = useCallback(async () => {
     try {
@@ -274,19 +332,16 @@ export const Policies: React.FC = () => {
         policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
       };
       
-      const [policiesResult, statsResult] = await Promise.all([
-        policyService.getPolicies(combinedFilters),
-        policyService.getPolicyStats()
-      ]);
+      const policiesResult = await policyService.getPolicies(combinedFilters);
       
       setUnsortedPolicies(policiesResult.policies);
-      setStats(statsResult);
+      setStats(calculatePolicyStats(policiesResult.policies));
     } catch (error) {
       console.error('Error refreshing policy data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filters]); // Removed applySortToPolicies dependency
+  }, [filters, calculatePolicyStats]);
 
   useEffect(() => {
     if (Object.keys(filters).length > 0) {

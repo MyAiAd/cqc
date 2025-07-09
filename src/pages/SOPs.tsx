@@ -162,6 +162,70 @@ export const SOPs: React.FC = () => {
     );
   };
 
+  // Calculate stats from filtered SOP items
+  const calculateSOPStats = useCallback((sopItems: PolicyItem[]) => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+    return {
+      total_policies: sopItems.length,
+      by_status: {
+        pending: sopItems.filter(p => p.status === 'pending').length,
+        submitted: sopItems.filter(p => p.status === 'submitted').length,
+        approved: sopItems.filter(p => p.status === 'approved').length,
+        rejected: sopItems.filter(p => p.status === 'rejected').length,
+        expired: sopItems.filter(p => p.status === 'expired').length,
+        under_review: sopItems.filter(p => p.status === 'under_review').length
+      },
+      by_compliance: {
+        compliant: sopItems.filter(p => p.compliance_status === 'compliant').length,
+        partially_compliant: sopItems.filter(p => p.compliance_status === 'partially_compliant').length,
+        not_compliant: sopItems.filter(p => p.compliance_status === 'not_compliant').length,
+        not_applicable: sopItems.filter(p => p.compliance_status === 'not_applicable').length
+      },
+      by_type: {
+        policy: 0,
+        procedure: 0,
+        sop: sopItems.length, // All items are SOPs
+        guideline: 0,
+        protocol: 0,
+        standard: 0
+      },
+      by_category: {
+        clinical_governance: sopItems.filter(p => p.policy_category === 'clinical_governance').length,
+        safeguarding: sopItems.filter(p => p.policy_category === 'safeguarding').length,
+        infection_control: sopItems.filter(p => p.policy_category === 'infection_control').length,
+        health_safety: sopItems.filter(p => p.policy_category === 'health_safety').length,
+        data_protection: sopItems.filter(p => p.policy_category === 'data_protection').length,
+        hr_policies: sopItems.filter(p => p.policy_category === 'hr_policies').length,
+        quality_assurance: sopItems.filter(p => p.policy_category === 'quality_assurance').length,
+        emergency_procedures: sopItems.filter(p => p.policy_category === 'emergency_procedures').length,
+        medication_management: sopItems.filter(p => p.policy_category === 'medication_management').length,
+        patient_care: sopItems.filter(p => p.policy_category === 'patient_care').length,
+        staff_training: sopItems.filter(p => p.policy_category === 'staff_training').length,
+        other: sopItems.filter(p => p.policy_category === 'other').length
+      },
+      due_for_review: sopItems.filter(p => 
+        p.next_review_date && 
+        new Date(p.next_review_date) <= thirtyDaysFromNow &&
+        new Date(p.next_review_date) >= today
+      ).length,
+      overdue_reviews: sopItems.filter(p => 
+        p.next_review_date && 
+        new Date(p.next_review_date) < today
+      ).length,
+      pending_approvals: sopItems.filter(p => 
+        p.status === 'submitted' || p.status === 'under_review'
+      ).length,
+      recently_updated: sopItems.filter(p => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        return new Date(p.updated_at) >= thirtyDaysAgo;
+      }).length
+    };
+  }, []);
+
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -173,10 +237,7 @@ export const SOPs: React.FC = () => {
           evidence_type: ['document', 'procedure'] as any[]
         };
         
-        const [evidenceResult, statsResult] = await Promise.all([
-          evidenceService.getEvidenceItems(sopFilters),
-          policyService.getPolicyStats()
-        ]);
+        const evidenceResult = await evidenceService.getEvidenceItems(sopFilters);
         
         // Filter for items that are tagged as SOPs or have SOP in title/description
         const sopItems = evidenceResult.items.filter(item => 
@@ -205,7 +266,7 @@ export const SOPs: React.FC = () => {
         }));
         
         setUnsortedPolicies(sopItems as PolicyItem[]);
-        setStats(statsResult);
+        setStats(calculateSOPStats(sopItems as PolicyItem[]));
       } catch (error) {
         console.error('Error loading SOP data:', error);
         setUnsortedPolicies([]);
@@ -242,10 +303,7 @@ export const SOPs: React.FC = () => {
         evidence_type: ['document', 'procedure'] as any[]
       };
       
-      const [evidenceResult, statsResult] = await Promise.all([
-        evidenceService.getEvidenceItems(combinedFilters),
-        policyService.getPolicyStats()
-      ]);
+      const evidenceResult = await evidenceService.getEvidenceItems(combinedFilters);
       
       // Filter for items that are tagged as SOPs or have SOP in title/description
       const sopItems = evidenceResult.items.filter(item => 
@@ -274,13 +332,13 @@ export const SOPs: React.FC = () => {
       }));
       
       setUnsortedPolicies(sopItems as PolicyItem[]);
-      setStats(statsResult);
+      setStats(calculateSOPStats(sopItems as PolicyItem[]));
     } catch (error) {
       console.error('Error loading SOP data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, calculateSOPStats]);
 
   const refreshData = useCallback(async () => {
     try {
@@ -292,10 +350,7 @@ export const SOPs: React.FC = () => {
         evidence_type: ['document', 'procedure'] as any[]
       };
       
-      const [evidenceResult, statsResult] = await Promise.all([
-        evidenceService.getEvidenceItems(combinedFilters),
-        policyService.getPolicyStats()
-      ]);
+      const evidenceResult = await evidenceService.getEvidenceItems(combinedFilters);
       
       // Filter for items that are tagged as SOPs or have SOP in title/description
       const sopItems = evidenceResult.items.filter(item => 
@@ -324,13 +379,13 @@ export const SOPs: React.FC = () => {
       }));
       
       setUnsortedPolicies(sopItems as PolicyItem[]);
-      setStats(statsResult);
+      setStats(calculateSOPStats(sopItems as PolicyItem[]));
     } catch (error) {
       console.error('Error refreshing SOP data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, calculateSOPStats]);
 
   useEffect(() => {
     if (Object.keys(filters).length > 0) {
