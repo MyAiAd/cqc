@@ -168,7 +168,13 @@ export const SOPs: React.FC = () => {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-    return {
+    // Debug: Log actual status values
+    console.log('=== SOP STATS DEBUG ===');
+    console.log('Total SOP items:', sopItems.length);
+    console.log('SOP statuses:', sopItems.map(p => ({ id: p.id, title: p.title, status: p.status })));
+    console.log('SOP compliance statuses:', sopItems.map(p => ({ id: p.id, title: p.title, compliance_status: p.compliance_status })));
+
+    const stats = {
       total_policies: sopItems.length,
       by_status: {
         pending: sopItems.filter(p => p.status === 'pending').length,
@@ -216,7 +222,7 @@ export const SOPs: React.FC = () => {
         new Date(p.next_review_date) < today
       ).length,
       pending_approvals: sopItems.filter(p => 
-        p.status === 'submitted' || p.status === 'under_review'
+        p.status === 'pending' || p.status === 'submitted' || p.status === 'under_review'
       ).length,
       recently_updated: sopItems.filter(p => {
         const thirtyDaysAgo = new Date();
@@ -224,6 +230,16 @@ export const SOPs: React.FC = () => {
         return new Date(p.updated_at) >= thirtyDaysAgo;
       }).length
     };
+
+    console.log('=== SOP STATS CALCULATED ===');
+    console.log('Pending approvals calculation:', {
+      pending: sopItems.filter(p => p.status === 'pending').length,
+      submitted: sopItems.filter(p => p.status === 'submitted').length,
+      under_review: sopItems.filter(p => p.status === 'under_review').length,
+      total_pending_approvals: stats.pending_approvals
+    });
+
+    return stats;
   }, []);
 
   useEffect(() => {

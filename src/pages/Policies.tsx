@@ -178,7 +178,13 @@ export const Policies: React.FC = () => {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-    return {
+    // Debug: Log actual status values
+    console.log('=== POLICY STATS DEBUG ===');
+    console.log('Total policy items:', policyItems.length);
+    console.log('Policy statuses:', policyItems.map(p => ({ id: p.id, title: p.title, status: p.status })));
+    console.log('Policy compliance statuses:', policyItems.map(p => ({ id: p.id, title: p.title, compliance_status: p.compliance_status })));
+
+    const stats = {
       total_policies: policyItems.length,
       by_status: {
         pending: policyItems.filter(p => p.status === 'pending').length,
@@ -226,7 +232,7 @@ export const Policies: React.FC = () => {
         new Date(p.next_review_date) < today
       ).length,
       pending_approvals: policyItems.filter(p => 
-        p.status === 'submitted' || p.status === 'under_review'
+        p.status === 'pending' || p.status === 'submitted' || p.status === 'under_review'
       ).length,
       recently_updated: policyItems.filter(p => {
         const thirtyDaysAgo = new Date();
@@ -234,6 +240,16 @@ export const Policies: React.FC = () => {
         return new Date(p.updated_at) >= thirtyDaysAgo;
       }).length
     };
+
+    console.log('=== POLICY STATS CALCULATED ===');
+    console.log('Pending approvals calculation:', {
+      pending: policyItems.filter(p => p.status === 'pending').length,
+      submitted: policyItems.filter(p => p.status === 'submitted').length,
+      under_review: policyItems.filter(p => p.status === 'under_review').length,
+      total_pending_approvals: stats.pending_approvals
+    });
+
+    return stats;
   }, []);
 
   useEffect(() => {
