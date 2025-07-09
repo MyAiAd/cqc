@@ -53,7 +53,7 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
           <TableHead>
             <TableRow>
               <TableHeaderCell className="w-1/6">Task Name</TableHeaderCell>
-              <TableHeaderCell className="w-1/6">Category</TableHeaderCell>
+              <TableHeaderCell className="w-1/6">Frequency</TableHeaderCell>
               <TableHeaderCell className="w-1/12">Risk</TableHeaderCell>
               <TableHeaderCell className="w-1/12">Links</TableHeaderCell>
               {staffNames.map((name, index) => (

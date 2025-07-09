@@ -97,7 +97,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-neutral-700">
-              Category *
+              Frequency *
             </label>
             <select
               id="category"

@@ -128,6 +128,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               label="Staff Management"
               isActive={location.pathname === '/staff'}
             />
+            <NavItem
+              to="/policies"
+              icon={<FileText />}
+              label="Policies & SOPs"
+              isActive={location.pathname === '/policies'}
+            />
           </div>
           
           <div className="pt-4 mt-4 border-t border-neutral-200">
@@ -151,12 +157,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               icon={<FolderOpen />}
               label="Evidence Management"
               isActive={location.pathname === '/evidence'}
-            />
-            <NavItem
-              to="/policies"
-              icon={<FileText />}
-              label="Policies & SOPs"
-              isActive={location.pathname === '/policies'}
             />
           </div>
           
