@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   FileText, 
-  Upload, 
   Search, 
   Filter, 
   Plus, 
@@ -14,13 +13,9 @@ import {
   Trash2,
   MessageSquare,
   XCircle,
-  MoreHorizontal,
-  BookOpen,
-  Shield,
-  Users,
   Calendar
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { EvidenceUploadModal } from '../components/evidence/EvidenceUploadModal';
@@ -40,9 +35,7 @@ import {
   ComplianceStatus
 } from '../types/evidence';
 
-export const Policies: React.FC = () => {
-  console.log('=== POLICIES PAGE LOADING ===');
-  
+export const SOPs: React.FC = () => {
   const { userProfile } = useAuth();
   const [policies, setPolicies] = useState<PolicyItem[]>([]);
   const [stats, setStats] = useState<PolicyStats | null>(null);
@@ -62,28 +55,24 @@ export const Policies: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('=== POLICIES USEEFFECT TRIGGERED ===');
     const loadInitialData = async () => {
       try {
-        console.log('=== LOADING POLICY DATA ===');
         setLoading(true);
         
-        // Filter to only get policies (excluding SOPs)
-        const policyFilters = {
-          policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
+        // Filter to only get SOPs
+        const sopFilters = {
+          policy_type: ['sop'] as PolicyType[]
         };
         
         const [policiesResult, statsResult] = await Promise.all([
-          policyService.getPolicies(policyFilters),
+          policyService.getPolicies(sopFilters),
           policyService.getPolicyStats()
         ]);
         
-        console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
-        console.log('=== POLICIES DATA ===', policiesResult.policies);
         setPolicies(policiesResult.policies);
         setStats(statsResult);
       } catch (error) {
-        console.error('=== ERROR LOADING POLICY DATA ===', error);
+        console.error('Error loading SOP data:', error);
         setPolicies([]);
         setStats({
           total_policies: 0,
@@ -106,17 +95,16 @@ export const Policies: React.FC = () => {
     };
 
     loadInitialData();
-  }, []); // Empty dependency array - runs only once on mount
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
-      console.log('=== LOADING POLICY DATA ===');
       setLoading(true);
       
-      // Add policy type filter to exclude SOPs
+      // Add SOP type filter
       const combinedFilters = {
         ...filters,
-        policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
+        policy_type: ['sop'] as PolicyType[]
       };
       
       const [policiesResult, statsResult] = await Promise.all([
@@ -124,28 +112,10 @@ export const Policies: React.FC = () => {
         policyService.getPolicyStats()
       ]);
       
-      console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
-      console.log('=== POLICIES DATA ===', policiesResult.policies);
       setPolicies(policiesResult.policies);
       setStats(statsResult);
     } catch (error) {
-      console.error('=== ERROR LOADING POLICY DATA ===', error);
-      setPolicies([]);
-      setStats({
-        total_policies: 0,
-        by_status: { pending: 0, submitted: 0, approved: 0, rejected: 0, expired: 0, under_review: 0 },
-        by_compliance: { compliant: 0, partially_compliant: 0, not_compliant: 0, not_applicable: 0 },
-        by_type: { policy: 0, procedure: 0, sop: 0, guideline: 0, protocol: 0, standard: 0 },
-        by_category: { 
-          clinical_governance: 0, safeguarding: 0, infection_control: 0, health_safety: 0,
-          data_protection: 0, hr_policies: 0, quality_assurance: 0, emergency_procedures: 0,
-          medication_management: 0, patient_care: 0, staff_training: 0, other: 0
-        },
-        due_for_review: 0,
-        overdue_reviews: 0,
-        pending_approvals: 0,
-        recently_updated: 0
-      });
+      console.error('Error loading SOP data:', error);
     } finally {
       setLoading(false);
     }
@@ -155,10 +125,10 @@ export const Policies: React.FC = () => {
     try {
       setLoading(true);
       
-      // Add policy type filter to exclude SOPs
+      // Add SOP type filter
       const combinedFilters = {
         ...filters,
-        policy_type: ['policy', 'procedure', 'guideline', 'protocol', 'standard'] as PolicyType[]
+        policy_type: ['sop'] as PolicyType[]
       };
       
       const [policiesResult, statsResult] = await Promise.all([
@@ -168,7 +138,7 @@ export const Policies: React.FC = () => {
       setPolicies(policiesResult.policies);
       setStats(statsResult);
     } catch (error) {
-      console.error('Error refreshing policy data:', error);
+      console.error('Error refreshing SOP data:', error);
     } finally {
       setLoading(false);
     }
@@ -180,7 +150,6 @@ export const Policies: React.FC = () => {
     }
   }, [filters, refreshData]);
 
-  // Action handlers (same as Evidence page)
   const handleView = (item: PolicyItem) => {
     setSelectedPolicy(item);
     setShowViewModal(true);
@@ -195,7 +164,6 @@ export const Policies: React.FC = () => {
     try {
       const blob = await policyService.downloadPolicy(item.id);
       
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -205,8 +173,8 @@ export const Policies: React.FC = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading policy:', error);
-      alert('Error downloading policy. Please try again.');
+      console.error('Error downloading SOP:', error);
+      alert('Error downloading SOP. Please try again.');
     }
   };
 
@@ -227,38 +195,11 @@ export const Policies: React.FC = () => {
       await policyService.deletePolicy(itemToDelete);
       refreshData();
     } catch (error) {
-      console.error('Error deleting policy:', error);
-      alert('Error deleting policy. Please try again.');
+      console.error('Error deleting SOP:', error);
+      alert('Error deleting SOP. Please try again.');
     } finally {
       setItemToDelete(null);
       setShowDeleteConfirm(false);
-    }
-  };
-
-  const handleStatusUpdate = async (itemId: string, status: EvidenceStatus) => {
-    try {
-      await policyService.updatePolicy(itemId, { status });
-      refreshData();
-    } catch (error) {
-      console.error('Error updating status:', error);
-    }
-  };
-
-  const handleApprove = async (itemId: string) => {
-    try {
-      await policyService.approvePolicy(itemId);
-      refreshData();
-    } catch (error) {
-      console.error('Error approving policy:', error);
-    }
-  };
-
-  const handleReject = async (itemId: string, reason: string) => {
-    try {
-      await policyService.rejectPolicy(itemId, reason);
-      refreshData();
-    } catch (error) {
-      console.error('Error rejecting policy:', error);
     }
   };
 
@@ -295,15 +236,6 @@ export const Policies: React.FC = () => {
     }
   };
 
-  const getPolicyTypeIcon = (type: PolicyType) => {
-    switch (type) {
-      case 'policy': return <Shield className="h-4 w-4 text-blue-600" />;
-      case 'procedure': return <BookOpen className="h-4 w-4 text-green-600" />;
-      case 'sop': return <FileText className="h-4 w-4 text-purple-600" />;
-      default: return <FileText className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -317,16 +249,16 @@ export const Policies: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Policies</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">Standard Operating Procedures</h1>
           <p className="text-neutral-600 mt-1">
-            Manage organizational policies, procedures, guidelines, protocols, and standards
+            Manage standard operating procedures (SOPs) and operational guidelines
           </p>
         </div>
         <Button 
           leftIcon={<Plus className="h-4 w-4" />}
           onClick={() => setShowUploadModal(true)}
         >
-          Add New Policy
+          Add New SOP
         </Button>
       </div>
 
@@ -337,10 +269,10 @@ export const Policies: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-neutral-600">Total Policies</p>
-                  <p className="text-2xl font-bold text-neutral-900">{stats.total_policies}</p>
+                  <p className="text-sm font-medium text-neutral-600">Total SOPs</p>
+                  <p className="text-2xl font-bold text-neutral-900">{stats.by_type.sop || 0}</p>
                 </div>
-                <FileText className="h-8 w-8 text-blue-600" />
+                <FileText className="h-8 w-8 text-purple-600" />
               </div>
             </CardContent>
           </Card>
@@ -392,7 +324,7 @@ export const Policies: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
                 <input
                   type="text"
-                  placeholder="Search policies..."
+                  placeholder="Search SOPs..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -410,7 +342,7 @@ export const Policies: React.FC = () => {
 
           {showFilters && (
             <div className="mt-4 p-4 bg-neutral-50 rounded-lg">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">Status</label>
                   <select 
@@ -426,23 +358,6 @@ export const Policies: React.FC = () => {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                     <option value="expired">Expired</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Type</label>
-                  <select 
-                    className="w-full border border-neutral-300 rounded-lg px-3 py-2"
-                    onChange={(e) => handleFilterChange({ 
-                      policy_type: e.target.value ? [e.target.value as PolicyType] : undefined 
-                    })}
-                  >
-                    <option value="">All Types</option>
-                    <option value="policy">Policy</option>
-                    <option value="procedure">Procedure</option>
-                    <option value="guideline">Guideline</option>
-                    <option value="protocol">Protocol</option>
-                    <option value="standard">Standard</option>
                   </select>
                 </div>
 
@@ -475,7 +390,7 @@ export const Policies: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Policies Table */}
+      {/* SOPs Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -489,8 +404,7 @@ export const Policies: React.FC = () => {
                     className="rounded border-neutral-300"
                   />
                 </TableHeaderCell>
-                <TableHeaderCell>Policy</TableHeaderCell>
-                <TableHeaderCell>Type</TableHeaderCell>
+                <TableHeaderCell>SOP</TableHeaderCell>
                 <TableHeaderCell>Category</TableHeaderCell>
                 <TableHeaderCell>Status</TableHeaderCell>
                 <TableHeaderCell>Compliance</TableHeaderCell>
@@ -512,7 +426,7 @@ export const Policies: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      {getPolicyTypeIcon(policy.policy_type)}
+                      <FileText className="h-4 w-4 text-purple-600" />
                       <div className="ml-3">
                         <div className="font-medium text-neutral-900">{policy.title}</div>
                         {policy.description && (
@@ -522,11 +436,6 @@ export const Policies: React.FC = () => {
                         )}
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="capitalize text-sm">
-                      {policyService.getPolicyTypeLabel(policy.policy_type)}
-                    </span>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">
@@ -570,7 +479,7 @@ export const Policies: React.FC = () => {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleView(policy)}
-                        title="View Policy"
+                        title="View SOP"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -578,7 +487,7 @@ export const Policies: React.FC = () => {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleEdit(policy)}
-                        title="Edit Policy"
+                        title="Edit SOP"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -587,7 +496,7 @@ export const Policies: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDownload(policy)}
-                          title="Download Policy"
+                          title="Download SOP"
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -604,7 +513,7 @@ export const Policies: React.FC = () => {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDeleteClick(policy.id)}
-                        title="Delete Policy"
+                        title="Delete SOP"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -618,15 +527,15 @@ export const Policies: React.FC = () => {
           {policies.length === 0 && !loading && (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-neutral-900 mb-2">No policies found</h3>
+              <h3 className="text-lg font-medium text-neutral-900 mb-2">No SOPs found</h3>
               <p className="text-neutral-600 mb-4">
-                Get started by adding your first policy or procedure.
+                Get started by adding your first standard operating procedure.
               </p>
               <Button
                 leftIcon={<Plus className="h-4 w-4" />}
                 onClick={() => setShowUploadModal(true)}
               >
-                Add Policy
+                Add SOP
               </Button>
             </div>
           )}
@@ -686,7 +595,7 @@ export const Policies: React.FC = () => {
           <div className="bg-white p-8 rounded-lg max-w-md w-full mx-4">
             <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
             <p className="text-neutral-600 mb-6">
-              Are you sure you want to delete this policy? This action cannot be undone.
+              Are you sure you want to delete this SOP? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <Button
@@ -711,4 +620,4 @@ export const Policies: React.FC = () => {
       )}
     </div>
   );
-};
+}; 

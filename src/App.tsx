@@ -13,6 +13,7 @@ import { Evidence } from './pages/Evidence';
 import Journey from './pages/Journey';
 import Documentation from './pages/Documentation';
 import { Policies } from './pages/Policies';
+import { SOPs } from './pages/SOPs';
 import { ImportExport } from './pages/ImportExport';
 import { Settings } from './pages/Settings';
 import { Pricing } from './pages/Pricing';
@@ -82,6 +83,7 @@ const AppContent: React.FC = () => {
             <Route path="/evidence" element={<Evidence />} />
             <Route path="/documentation" element={<Documentation />} />
             <Route path="/policies" element={<Policies />} />
+            <Route path="/sops" element={<SOPs />} />
             <Route path="/import-export" element={<ImportExport />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/pricing" element={<Pricing />} />

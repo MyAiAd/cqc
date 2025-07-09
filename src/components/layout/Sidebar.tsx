@@ -131,8 +131,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
             <NavItem
               to="/policies"
               icon={<FileText />}
-              label="Policies & SOPs"
+              label="Policies"
               isActive={location.pathname === '/policies'}
+            />
+            <NavItem
+              to="/sops"
+              icon={<FileText />}
+              label="SOPs"
+              isActive={location.pathname === '/sops'}
             />
           </div>
           
