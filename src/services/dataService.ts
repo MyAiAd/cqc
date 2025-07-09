@@ -3,16 +3,55 @@ import type { Task, Staff, CompetencyStatus } from '../types';
 
 // Get current user's practice ID
 const getCurrentPracticeId = async (): Promise<string | null> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  console.log('=== GET CURRENT PRACTICE ID DEBUG ===');
+  
+  try {
+    console.log('Step 1: Getting current user from Supabase auth...');
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('Auth user result:', user ? { id: user.id, email: user.email } : null);
+    
+    if (!user) {
+      console.log('ERROR: No authenticated user found');
+      return null;
+    }
 
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('practice_id')
-    .eq('id', user.id)
-    .single();
+    console.log('Step 2: Fetching user profile from database...');
+    const { data: userProfile, error } = await supabase
+      .from('users')
+      .select('practice_id, role, email, name')
+      .eq('id', user.id)
+      .single();
 
-  return userProfile?.practice_id || null;
+    console.log('User profile query result:', userProfile);
+    console.log('User profile query error:', error);
+
+    if (error) {
+      console.error('ERROR fetching user profile:', error);
+      return null;
+    }
+
+    if (!userProfile) {
+      console.log('ERROR: No user profile found in database');
+      return null;
+    }
+
+    console.log('User profile data:', {
+      practice_id: userProfile.practice_id,
+      role: userProfile.role,
+      email: userProfile.email,
+      name: userProfile.name
+    });
+
+    const result = userProfile?.practice_id || null;
+    console.log('Final practice_id result:', result);
+    console.log('=== GET CURRENT PRACTICE ID COMPLETE ===');
+    
+    return result;
+  } catch (error) {
+    console.error('=== GET CURRENT PRACTICE ID ERROR ===');
+    console.error('Error details:', error);
+    return null;
+  }
 };
 
 // Tasks
@@ -163,39 +202,87 @@ export const getStaff = async (): Promise<Staff[]> => {
 };
 
 export const createStaff = async (staffData: Omit<Staff, 'id'>, practice_id?: string): Promise<Staff | null> => {
-  // Use provided practice_id (for super admin) or get current user's practice_id
-  let targetPracticeId = practice_id;
+  console.log('=== CREATE STAFF SERVICE DEBUG START ===');
+  console.log('Input staffData:', staffData);
+  console.log('Input practice_id:', practice_id);
   
-  if (!targetPracticeId) {
-    const currentPracticeId = await getCurrentPracticeId();
-    if (!currentPracticeId) return null;
-    targetPracticeId = currentPracticeId;
-  }
-
-  const { data: staff, error } = await supabase
-    .from('staff')
-    .insert({
+  try {
+    // Use provided practice_id (for super admin) or get current user's practice_id
+    let targetPracticeId = practice_id;
+    
+    console.log('Step 1: Determining target practice ID...');
+    console.log('Provided practice_id:', practice_id);
+    
+    if (!targetPracticeId) {
+      console.log('No practice_id provided, getting current user practice...');
+      const currentPracticeId = await getCurrentPracticeId();
+      console.log('getCurrentPracticeId result:', currentPracticeId);
+      if (!currentPracticeId) {
+        console.log('ERROR: getCurrentPracticeId returned null');
+        return null;
+      }
+      targetPracticeId = currentPracticeId;
+    }
+    
+    console.log('Final targetPracticeId:', targetPracticeId);
+    
+    console.log('Step 2: Preparing data for database insertion...');
+    const insertData = {
       practice_id: targetPracticeId,
       name: staffData.name,
       email: staffData.email,
       role: staffData.role,
       department: staffData.department,
-    })
-    .select()
-    .single();
+    };
+    console.log('Data to insert:', insertData);
 
-  if (error) {
-    console.error('Error creating staff:', error);
+    console.log('Step 3: Executing Supabase insert...');
+    const { data: staff, error } = await supabase
+      .from('staff')
+      .insert(insertData)
+      .select()
+      .single();
+
+    console.log('Step 4: Supabase response...');
+    console.log('Supabase data:', staff);
+    console.log('Supabase error:', error);
+
+    if (error) {
+      console.error('=== SUPABASE ERROR DETAILS ===');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      console.error('Full error object:', error);
+      return null;
+    }
+
+    if (!staff) {
+      console.log('WARNING: No error but no staff data returned');
+      return null;
+    }
+
+    console.log('Step 5: Transforming result...');
+    const result = {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      role: staff.role,
+      department: staff.department
+    };
+    
+    console.log('Final result:', result);
+    console.log('=== CREATE STAFF SERVICE SUCCESS ===');
+    return result;
+
+  } catch (error) {
+    console.error('=== CREATE STAFF SERVICE ERROR ===');
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : error);
+    console.error('Full error object:', error);
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     return null;
   }
-
-  return {
-    id: staff.id,
-    name: staff.name,
-    email: staff.email,
-    role: staff.role,
-    department: staff.department
-  };
 };
 
 // Competencies

@@ -133,59 +133,97 @@ export const Staff: React.FC = () => {
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== STAFF CREATION DEBUG START ===');
+    console.log('User Profile:', userProfile);
+    console.log('Form Data:', newStaff);
+    console.log('Practices Available:', practices);
+    
     try {
       setIsCreating(true);
       setError(null);
 
+      console.log('Step 1: Checking user role and subscription limits...');
+      
       // Check subscription limits for non-super admins
       if (userProfile?.role !== 'super_admin') {
+        console.log('Non-super admin user detected, checking subscription limits...');
         const canAdd = await canAddStaff();
+        console.log('Can add staff:', canAdd);
         if (!canAdd) {
+          console.log('Staff limit reached for subscription plan');
           setError('Staff limit reached for your subscription plan. Please upgrade to add more staff members.');
           return;
         }
+      } else {
+        console.log('Super admin user detected, bypassing subscription limits');
       }
 
+      console.log('Step 2: Validating required fields...');
+      
       // Validate required fields
       if (!newStaff.name.trim()) {
+        console.log('Validation failed: Name is required');
         setError('Please enter a staff member name.');
         return;
       }
+      console.log('Name validation passed:', newStaff.name.trim());
 
       // For super admin, validate practice selection
       if (userProfile?.role === 'super_admin' && !newStaff.practice_id) {
+        console.log('Validation failed: Practice selection required for super admin');
         setError('Please select a practice.');
         return;
       }
+      console.log('Practice validation passed');
 
+      console.log('Step 3: Determining target practice ID...');
+      
       // Determine target practice ID
       const targetPracticeId = userProfile?.role === 'super_admin' 
         ? newStaff.practice_id 
         : userProfile?.practice_id;
 
+      console.log('Target Practice ID:', targetPracticeId);
+      console.log('Selected by super admin:', userProfile?.role === 'super_admin' ? newStaff.practice_id : 'N/A');
+      console.log('User practice ID:', userProfile?.practice_id);
+
       if (!targetPracticeId) {
+        console.log('ERROR: Unable to determine target practice ID');
         setError('Unable to determine practice. Please try again.');
         return;
       }
 
-      const createdStaff = await createStaff({
+      console.log('Step 4: Preparing staff data for creation...');
+      
+      const staffDataToCreate = {
         name: newStaff.name.trim(),
         email: newStaff.email.trim() || undefined,
         role: newStaff.role.trim() || undefined,
         department: newStaff.department.trim() || undefined,
-      }, targetPracticeId);
+      };
+      
+      console.log('Staff data to create:', staffDataToCreate);
+      console.log('Target practice ID for creation:', targetPracticeId);
+
+      console.log('Step 5: Calling createStaff function...');
+      
+      const createdStaff = await createStaff(staffDataToCreate, targetPracticeId);
+      
+      console.log('Step 6: createStaff result:', createdStaff);
 
       if (createdStaff) {
-        // Refresh the staff list
+        console.log('SUCCESS: Staff member created successfully!', createdStaff);
+        
+        console.log('Step 7: Refreshing staff list...');
         await loadStaff();
         
-        // Refresh subscription data to update usage counts
+        console.log('Step 8: Refreshing subscription data...');
         await refreshSubscription();
         
-        // Check if user can still add more staff
+        console.log('Step 9: Checking staff limits...');
         await checkStaffLimit();
         
-        // Reset form and close modal
+        console.log('Step 10: Resetting form and closing modal...');
         setNewStaff({
           name: '',
           email: '',
@@ -194,11 +232,21 @@ export const Staff: React.FC = () => {
           practice_id: userProfile?.practice_id || ''
         });
         setShowCreateModal(false);
+        
+        console.log('=== STAFF CREATION SUCCESS ===');
+      } else {
+        console.log('ERROR: createStaff returned null/undefined');
+        setError('Failed to create staff member. The function returned no result.');
       }
     } catch (error) {
-      console.error('Error creating staff:', error);
-      setError('Error creating staff member. Please try again.');
+      console.error('=== STAFF CREATION ERROR ===');
+      console.error('Error type:', typeof error);
+      console.error('Error message:', error instanceof Error ? error.message : error);
+      console.error('Full error object:', error);
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+      setError(`Error creating staff member: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
+      console.log('=== STAFF CREATION DEBUG END ===');
       setIsCreating(false);
     }
   };
