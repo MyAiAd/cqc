@@ -137,31 +137,58 @@ export const StatusManager: React.FC<StatusManagerProps> = ({
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-            <div className="p-2">
-              <div className="text-xs font-medium text-gray-700 mb-2">Change Status</div>
-              {STATUS_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => handleStatusChange(option.value)}
-                  disabled={option.value === currentStatus}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                    option.value === currentStatus 
-                      ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <div className={`p-1 rounded ${option.color.split(' ')[1]} ${option.color.split(' ')[0]}`}>
-                      {option.icon}
-                    </div>
-                    <div className="ml-3">
-                      <div className="font-medium">{option.label}</div>
-                      <div className="text-xs text-gray-500">{option.description}</div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+          <div className="fixed inset-0 z-[9999]" onClick={() => setIsOpen(false)}>
+            <div 
+              className="absolute w-72 bg-white rounded-lg shadow-2xl border border-gray-300 z-[10000]"
+              style={{
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                maxHeight: '80vh',
+                overflowY: 'auto'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 bg-white rounded-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-sm font-semibold text-gray-800">Change Status</div>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {STATUS_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleStatusChange(option.value)}
+                      disabled={option.value === currentStatus}
+                      className={`w-full text-left px-3 py-3 rounded-lg text-sm transition-all duration-200 border ${
+                        option.value === currentStatus 
+                          ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' 
+                          : 'hover:bg-gray-50 text-gray-700 border-transparent hover:border-gray-200 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <div className={`p-2 rounded-md ${option.color.split(' ')[1]} ${option.color.split(' ')[0]}`}>
+                          {option.icon}
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <div className="font-medium text-gray-900">{option.label}</div>
+                          <div className="text-xs text-gray-600 mt-1">{option.description}</div>
+                        </div>
+                        {option.value === currentStatus && (
+                          <div className="ml-2">
+                            <Check className="h-4 w-4 text-green-600" />
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -194,13 +221,7 @@ export const StatusManager: React.FC<StatusManagerProps> = ({
         </div>
       )}
 
-      {/* Click outside to close */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+
     </>
   );
 }; 
