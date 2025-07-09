@@ -30,7 +30,7 @@ class EvidenceService {
 
     // If user is super admin and doesn't have a practice_id, use Riverside Health Practice
     // This allows super admin to manage evidence globally while maintaining data isolation
-    if (userProfile?.role === 'admin' && !userProfile?.practice_id) {
+    if (userProfile?.role === 'super_admin' && !userProfile?.practice_id) {
       console.log('Super admin detected, using Global Practice context');
       return '00000000-0000-0000-0000-000000000003';
     }
@@ -54,7 +54,7 @@ class EvidenceService {
       .single();
 
     // If user is super admin, show "Global Practice"
-    if (userProfile?.role === 'admin' && !userProfile?.practice_id) {
+    if (userProfile?.role === 'super_admin' && !userProfile?.practice_id) {
       return 'Global Practice';
     }
 
@@ -77,88 +77,138 @@ class EvidenceService {
   // ============================================================================
 
   async getEvidenceItems(filters?: EvidenceSearchFilters): Promise<EvidenceSearchResult> {
-    const practiceId = await this.getCurrentPracticeId();
-    
-    let query = supabase
-      .from('evidence_items')
-      .select(`
-        *,
-        requirement:evidence_requirements(*),
-        category:evidence_categories(*),
-        files:evidence_files(*),
-        comments:evidence_comments(
+    try {
+      // Get current user to check if they're super admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No authenticated user found for getEvidenceItems');
+        return { items: [], total_count: 0, page: 1, page_size: 50, filters_applied: filters || {} };
+      }
+
+      console.log('Step 1: Checking user role for evidence...');
+      const { data: userProfile, error: userError } = await supabase
+        .from('users')
+        .select('practice_id, role, email, name')
+        .eq('id', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user profile for evidence:', userError);
+        return { items: [], total_count: 0, page: 1, page_size: 50, filters_applied: filters || {} };
+      }
+
+      const isSuperAdmin = userProfile?.role === 'super_admin';
+      console.log('User profile for evidence:', userProfile);
+      console.log('Is super admin for evidence?', isSuperAdmin);
+
+      let query = supabase
+        .from('evidence_items')
+        .select(`
           *,
-          created_by_user:users(name, email)
-        )
-      `)
-      .eq('practice_id', practiceId);
+          requirement:evidence_requirements(*),
+          category:evidence_categories(*),
+          files:evidence_files(*),
+          practice:practices(id, name, email_domain),
+          comments:evidence_comments(
+            *,
+            created_by_user:users(name, email)
+          )
+        `);
 
-    // Apply filters
-    if (filters?.status?.length) {
-      query = query.in('status', filters.status);
-    }
-    
-    if (filters?.compliance_status?.length) {
-      query = query.in('compliance_status', filters.compliance_status);
-    }
-    
-    if (filters?.evidence_type?.length) {
-      query = query.in('evidence_type', filters.evidence_type);
-    }
-    
-    if (filters?.category_id) {
-      query = query.eq('category_id', filters.category_id);
-    }
-    
-    if (filters?.requirement_id) {
-      query = query.eq('requirement_id', filters.requirement_id);
-    }
-    
-    if (filters?.assigned_to) {
-      query = query.eq('assigned_to', filters.assigned_to);
-    }
-    
-    if (filters?.date_from) {
-      query = query.gte('evidence_date', filters.date_from);
-    }
-    
-    if (filters?.date_to) {
-      query = query.lte('evidence_date', filters.date_to);
-    }
-    
-    if (filters?.expiring_soon) {
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      query = query.lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0]);
-    }
-    
-    if (filters?.overdue) {
-      const today = new Date().toISOString().split('T')[0];
-      query = query.lt('next_review_date', today);
-    }
+      if (isSuperAdmin) {
+        console.log('Super admin detected - fetching evidence from ALL practices');
+        // Super admin sees all evidence from all practices
+        query = query.order('created_at', { ascending: false });
+      } else {
+        console.log('Regular user - fetching evidence from their practice only');
+        // Regular users only see evidence from their practice
+        const practiceId = userProfile?.practice_id;
+        if (!practiceId) {
+          console.log('No practice ID found for regular user');
+          return { items: [], total_count: 0, page: 1, page_size: 50, filters_applied: filters || {} };
+        }
+        query = query.eq('practice_id', practiceId);
+      }
 
-    // Add pagination (default to first 50 items)
-    const page = 1;
-    const pageSize = 50;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    
-    query = query.range(from, to);
+      // Apply filters
+      if (filters?.status?.length) {
+        query = query.in('status', filters.status);
+      }
+      
+      if (filters?.compliance_status?.length) {
+        query = query.in('compliance_status', filters.compliance_status);
+      }
+      
+      if (filters?.evidence_type?.length) {
+        query = query.in('evidence_type', filters.evidence_type);
+      }
+      
+      if (filters?.category_id) {
+        query = query.eq('category_id', filters.category_id);
+      }
+      
+      if (filters?.requirement_id) {
+        query = query.eq('requirement_id', filters.requirement_id);
+      }
+      
+      if (filters?.assigned_to) {
+        query = query.eq('assigned_to', filters.assigned_to);
+      }
+      
+      if (filters?.date_from) {
+        query = query.gte('evidence_date', filters.date_from);
+      }
+      
+      if (filters?.date_to) {
+        query = query.lte('evidence_date', filters.date_to);
+      }
+      
+      if (filters?.expiring_soon) {
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        query = query.lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0]);
+      }
+      
+      if (filters?.overdue) {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.lt('next_review_date', today);
+      }
 
-    const { data, error, count } = await query;
-    
-    if (error) {
-      console.error('Error fetching evidence items:', error);
-      throw new Error(`Failed to fetch evidence items: ${error.message}`);
+
+
+      const { data: items, error, count } = await query;
+
+      if (error) {
+        console.error('Error fetching evidence items:', error);
+        return { items: [], total_count: 0, page: 1, page_size: 50, filters_applied: filters || {} };
+      }
+
+      console.log('Evidence items fetched:', items?.length || 0);
+
+      // Transform items to include practice information for super admin
+      const transformedItems = items?.map(item => ({
+        ...item,
+        // Add practice information for super admin
+        ...(isSuperAdmin && item.practice ? {
+          practiceName: item.practice.name,
+          practiceId: item.practice.id
+        } : {})
+      })) || [];
+
+      console.log('Processed evidence items count:', transformedItems.length);
+
+      return {
+        items: transformedItems,
+        total_count: count || transformedItems.length,
+        page: 1,
+        page_size: 50,
+        filters_applied: filters || {}
+      };
+
+    } catch (error) {
+      console.error('Error in getEvidenceItems:', error);
+      return { items: [], total_count: 0, page: 1, page_size: 50, filters_applied: filters || {} };
     }
-
-    return {
-      items: data || [],
-      total_count: count || 0,
-      page,
-      page_size: pageSize,
-      filters_applied: filters || {}
-    };
   }
 
   async getEvidenceItem(id: string): Promise<EvidenceItem> {
@@ -609,15 +659,21 @@ class EvidenceService {
       pending_approvals: 0
     };
 
-    items?.forEach(item => {
+    items?.forEach((item: any) => {
       // Count by status
-      stats.by_status[item.status]++;
+      if (item.status && stats.by_status[item.status as keyof typeof stats.by_status] !== undefined) {
+        stats.by_status[item.status as keyof typeof stats.by_status]++;
+      }
       
       // Count by compliance
-      stats.by_compliance[item.compliance_status]++;
+      if (item.compliance_status && stats.by_compliance[item.compliance_status as keyof typeof stats.by_compliance] !== undefined) {
+        stats.by_compliance[item.compliance_status as keyof typeof stats.by_compliance]++;
+      }
       
       // Count by type
-      stats.by_type[item.evidence_type]++;
+      if (item.evidence_type && stats.by_type[item.evidence_type as keyof typeof stats.by_type] !== undefined) {
+        stats.by_type[item.evidence_type as keyof typeof stats.by_type]++;
+      }
       
       // Count expiring soon
       if (item.expiry_date && new Date(item.expiry_date) <= thirtyDaysFromNow) {
@@ -661,13 +717,13 @@ class EvidenceService {
     return (requirements || []).map(req => {
       const evidenceItems = req.evidence_items || [];
       const totalNeeded = req.evidence_needed.length;
-      const submitted = evidenceItems.filter(item => 
+      const submitted = evidenceItems.filter((item: any) => 
         item.status === 'submitted' || item.status === 'approved'
       ).length;
-      const approved = evidenceItems.filter(item => 
+      const approved = evidenceItems.filter((item: any) => 
         item.status === 'approved'
       ).length;
-      const overdue = evidenceItems.filter(item => 
+      const overdue = evidenceItems.filter((item: any) => 
         item.next_review_date && new Date(item.next_review_date) < today
       ).length;
 
