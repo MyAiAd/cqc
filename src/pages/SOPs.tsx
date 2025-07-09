@@ -469,10 +469,38 @@ export const SOPs: React.FC = () => {
 
   const handleStatusUpdate = async (itemId: string, status: EvidenceStatus) => {
     try {
+      console.log('=== UPDATING SOP STATUS ===');
+      console.log('SOP ID:', itemId, 'New Status:', status);
+      
+      // Update the SOP in the database
       await policyService.updatePolicy(itemId, { status });
-      refreshData();
+      
+      // Immediately update the local state optimistically
+      setUnsortedPolicies(prevPolicies => {
+        const updatedPolicies = prevPolicies.map(policy => 
+          policy.id === itemId ? { ...policy, status } : policy
+        );
+        
+        // Recalculate stats with updated data
+        const newStats = calculateSOPStats(updatedPolicies);
+        setStats(newStats);
+        
+        console.log('=== OPTIMISTIC UPDATE COMPLETE ===');
+        console.log('Updated SOP found:', updatedPolicies.find(p => p.id === itemId)?.status);
+        console.log('New stats:', newStats);
+        
+        return updatedPolicies;
+      });
+      
+      // Also refresh from server to ensure consistency
+      setTimeout(() => {
+        refreshData();
+      }, 500);
+      
     } catch (error) {
       console.error('Error updating SOP status:', error);
+      // If there's an error, refresh from server to revert optimistic update
+      refreshData();
     }
   };
 

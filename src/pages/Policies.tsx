@@ -427,10 +427,38 @@ export const Policies: React.FC = () => {
 
   const handleStatusUpdate = async (itemId: string, status: EvidenceStatus) => {
     try {
+      console.log('=== UPDATING POLICY STATUS ===');
+      console.log('Policy ID:', itemId, 'New Status:', status);
+      
+      // Update the policy in the database
       await policyService.updatePolicy(itemId, { status });
-      refreshData();
+      
+      // Immediately update the local state optimistically
+      setUnsortedPolicies(prevPolicies => {
+        const updatedPolicies = prevPolicies.map(policy => 
+          policy.id === itemId ? { ...policy, status } : policy
+        );
+        
+        // Recalculate stats with updated data
+        const newStats = calculatePolicyStats(updatedPolicies);
+        setStats(newStats);
+        
+        console.log('=== OPTIMISTIC UPDATE COMPLETE ===');
+        console.log('Updated policy found:', updatedPolicies.find(p => p.id === itemId)?.status);
+        console.log('New stats:', newStats);
+        
+        return updatedPolicies;
+      });
+      
+      // Also refresh from server to ensure consistency
+      setTimeout(() => {
+        refreshData();
+      }, 500);
+      
     } catch (error) {
       console.error('Error updating status:', error);
+      // If there's an error, refresh from server to revert optimistic update
+      refreshData();
     }
   };
 
