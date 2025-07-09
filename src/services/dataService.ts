@@ -56,60 +56,133 @@ const getCurrentPracticeId = async (): Promise<string | null> => {
 
 // Tasks
 export const getTasks = async (): Promise<Task[]> => {
-  const practiceId = await getCurrentPracticeId();
-  if (!practiceId) return [];
+  try {
+    // Get current user to check if they're super admin
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('No authenticated user found for getTasks');
+      return [];
+    }
 
-  const { data: tasks, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('practice_id', practiceId);
+    console.log('Step 1: Checking user role for tasks...');
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('practice_id, role, email, name')
+      .eq('id', user.id)
+      .single();
 
-  if (error) {
-    console.error('Error fetching tasks:', error);
+    if (userError) {
+      console.error('Error fetching user profile for tasks:', userError);
+      return [];
+    }
+
+    const isSuperAdmin = userProfile?.role === 'super_admin';
+    console.log('User profile for tasks:', userProfile);
+    console.log('Is super admin for tasks?', isSuperAdmin);
+
+    let query = supabase.from('tasks').select(`
+      *,
+      practice:practices(id, name, email_domain)
+    `);
+
+    if (isSuperAdmin) {
+      console.log('Super admin detected - fetching tasks from ALL practices');
+      // Super admin sees all tasks from all practices
+      query = query.order('created_at', { ascending: false });
+    } else {
+      console.log('Regular user - fetching tasks from their practice only');
+      // Regular users only see tasks from their practice
+      const practiceId = userProfile?.practice_id;
+      if (!practiceId) {
+        console.log('No practice ID found for regular user');
+        return [];
+      }
+      query = query.eq('practice_id', practiceId);
+    }
+
+    const { data: tasks, error } = await query;
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return [];
+    }
+
+    console.log('Tasks fetched:', tasks?.length || 0);
+
+    // Get competencies for all tasks
+    const taskIds = tasks?.map(task => task.id) || [];
+    const { data: competencies } = await supabase
+      .from('competencies')
+      .select(`
+        *,
+        staff:staff(name)
+      `)
+      .in('task_id', taskIds);
+
+    // Transform to match your existing Task interface
+    const result = tasks?.map(task => ({
+      id: task.id,
+      name: task.name,
+      description: task.description,
+      category: task.category as Task['category'],
+      sopLink: task.sop_link,
+      policyLink: task.policy_link,
+      riskRating: task.risk_rating as Task['riskRating'],
+      owner: task.owner,
+      createdAt: new Date(task.created_at),
+      updatedAt: new Date(task.updated_at),
+      // Add practice information for super admin
+      ...(isSuperAdmin && task.practice ? {
+        practiceName: task.practice.name,
+        practiceId: task.practice.id
+      } : {}),
+      competencies: competencies
+        ?.filter(comp => comp.task_id === task.id)
+        .map(comp => ({
+          staffId: comp.staff_id,
+          staffName: comp.staff?.name || 'Unknown',
+          status: comp.status as CompetencyStatus,
+          lastUpdated: new Date(comp.last_updated)
+        })) || []
+    })) || [];
+
+    console.log('Processed tasks count:', result.length);
+    return result;
+
+  } catch (error) {
+    console.error('Error in getTasks:', error);
     return [];
   }
-
-  // Get competencies for all tasks
-  const taskIds = tasks?.map(task => task.id) || [];
-  const { data: competencies } = await supabase
-    .from('competencies')
-    .select(`
-      *,
-      staff:staff(name)
-    `)
-    .in('task_id', taskIds);
-
-  // Transform to match your existing Task interface
-  return tasks?.map(task => ({
-    id: task.id,
-    name: task.name,
-    description: task.description,
-    category: task.category as Task['category'],
-    sopLink: task.sop_link,
-    policyLink: task.policy_link,
-    riskRating: task.risk_rating as Task['riskRating'],
-    owner: task.owner,
-    createdAt: new Date(task.created_at),
-    updatedAt: new Date(task.updated_at),
-    competencies: competencies
-      ?.filter(comp => comp.task_id === task.id)
-      .map(comp => ({
-        staffId: comp.staff_id,
-        staffName: comp.staff?.name || 'Unknown',
-        status: comp.status as CompetencyStatus,
-        lastUpdated: new Date(comp.last_updated)
-      })) || []
-  })) || [];
 };
 
-export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'competencies'>): Promise<Task | null> => {
-  const practiceId = await getCurrentPracticeId();
-  if (!practiceId) return null;
-
-  const { data: task, error } = await supabase
-    .from('tasks')
-    .insert({
-      practice_id: practiceId,
+export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'competencies'>, practice_id?: string): Promise<Task | null> => {
+  console.log('=== CREATE TASK SERVICE DEBUG START ===');
+  console.log('Input taskData:', taskData);
+  console.log('Input practice_id:', practice_id);
+  
+  try {
+    // Use provided practice_id (for super admin) or get current user's practice_id
+    let targetPracticeId = practice_id;
+    
+    console.log('Step 1: Determining target practice ID for task...');
+    console.log('Provided practice_id:', practice_id);
+    
+    if (!targetPracticeId) {
+      console.log('No practice_id provided, getting current user practice...');
+      const currentPracticeId = await getCurrentPracticeId();
+      console.log('getCurrentPracticeId result for task:', currentPracticeId);
+      if (!currentPracticeId) {
+        console.log('ERROR: getCurrentPracticeId returned null for task');
+        return null;
+      }
+      targetPracticeId = currentPracticeId;
+    }
+    
+    console.log('Final targetPracticeId for task:', targetPracticeId);
+    
+    console.log('Step 2: Preparing task data for database insertion...');
+    const insertData = {
+      practice_id: targetPracticeId,
       name: taskData.name,
       description: taskData.description,
       category: taskData.category,
@@ -117,28 +190,62 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       policy_link: taskData.policyLink,
       risk_rating: taskData.riskRating,
       owner: taskData.owner,
-    })
-    .select()
-    .single();
+    };
+    console.log('Task data to insert:', insertData);
 
-  if (error) {
-    console.error('Error creating task:', error);
+    console.log('Step 3: Executing Supabase task insert...');
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .insert(insertData)
+      .select()
+      .single();
+
+    console.log('Step 4: Supabase task response...');
+    console.log('Supabase task data:', task);
+    console.log('Supabase task error:', error);
+
+    if (error) {
+      console.error('=== SUPABASE TASK ERROR DETAILS ===');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      console.error('Full error object:', error);
+      return null;
+    }
+
+    if (!task) {
+      console.log('WARNING: No error but no task data returned');
+      return null;
+    }
+
+    console.log('Step 5: Transforming task result...');
+    const result = {
+      id: task.id,
+      name: task.name,
+      description: task.description,
+      category: task.category as Task['category'],
+      sopLink: task.sop_link,
+      policyLink: task.policy_link,
+      riskRating: task.risk_rating as Task['riskRating'],
+      owner: task.owner,
+      createdAt: new Date(task.created_at),
+      updatedAt: new Date(task.updated_at),
+      competencies: []
+    };
+
+    console.log('Final task result:', result);
+    console.log('=== CREATE TASK SERVICE SUCCESS ===');
+    return result;
+
+  } catch (error) {
+    console.error('=== CREATE TASK SERVICE ERROR ===');
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : error);
+    console.error('Full error object:', error);
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     return null;
   }
-
-  return {
-    id: task.id,
-    name: task.name,
-    description: task.description,
-    category: task.category as Task['category'],
-    sopLink: task.sop_link,
-    policyLink: task.policy_link,
-    riskRating: task.risk_rating as Task['riskRating'],
-    owner: task.owner,
-    createdAt: new Date(task.created_at),
-    updatedAt: new Date(task.updated_at),
-    competencies: []
-  };
 };
 
 export const updateTask = async (taskId: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'competencies'>>): Promise<boolean> => {

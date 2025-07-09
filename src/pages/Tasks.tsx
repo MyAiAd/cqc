@@ -5,10 +5,11 @@ import { TaskForm } from '../components/tasks/TaskForm';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { RiskBadge } from '../components/ui/Badge';
-import { getTasks, getStaff, createTask, updateTask } from '../services/dataService';
+import { useAuth } from '../contexts/AuthContext';
+import { getTasks, getStaff, createTask, updateTask, getAllPractices } from '../services/dataService';
 import { Task, Staff, TaskFrequency, RiskRating } from '../types';
 
-type SortField = 'name' | 'frequency' | 'risk' | 'owner' | 'lastUpdated';
+type SortField = 'name' | 'frequency' | 'risk' | 'owner' | 'lastUpdated' | 'practiceName';
 type SortDirection = 'asc' | 'desc';
 
 interface SortState {
@@ -22,6 +23,15 @@ interface SortableHeaderProps {
   currentSort: SortState;
   onSort: (field: SortField) => void;
   className?: string;
+}
+
+interface Practice {
+  id: string;
+  name: string;
+  email_domain: string;
+  subscription_tier: 'free' | 'basic' | 'premium';
+  created_at: string;
+  updated_at: string;
 }
 
 const SortableHeader: React.FC<SortableHeaderProps> = ({ 
@@ -47,13 +57,16 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({
 };
 
 export const Tasks: React.FC = () => {
+  const { userProfile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [practices, setPractices] = useState<Practice[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
+  const [selectedPracticeId, setSelectedPracticeId] = useState<string>('');
   const [sortState, setSortState] = useState<SortState>({ field: null, direction: 'asc' });
 
   // Custom sort orders
@@ -75,7 +88,8 @@ export const Tasks: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+    loadPractices();
+  }, [userProfile]);
 
   const loadData = async () => {
     try {
@@ -94,6 +108,18 @@ export const Tasks: React.FC = () => {
       setError('Failed to load tasks and staff data. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPractices = async () => {
+    // Only load practices if user is super admin
+    if (userProfile?.role === 'super_admin') {
+      try {
+        const practicesData = await getAllPractices();
+        setPractices(practicesData);
+      } catch (error) {
+        console.error('Error loading practices:', error);
+      }
     }
   };
 
@@ -137,6 +163,11 @@ export const Tasks: React.FC = () => {
           bValue = b.updatedAt.getTime();
           break;
         
+        case 'practiceName':
+          aValue = (a.practiceName || '').toLowerCase();
+          bValue = (b.practiceName || '').toLowerCase();
+          break;
+        
         default:
           return 0;
       }
@@ -153,11 +184,13 @@ export const Tasks: React.FC = () => {
 
   const handleNewTask = () => {
     setSelectedTask(undefined);
+    setSelectedPracticeId(userProfile?.practice_id || '');
     setShowTaskForm(true);
   };
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
+    setSelectedPracticeId(task.practiceId || userProfile?.practice_id || '');
     setShowTaskForm(true);
   };
 
@@ -165,6 +198,12 @@ export const Tasks: React.FC = () => {
     try {
       setIsCreating(true);
       setError(null);
+
+      // Validate practice selection for super admin creating new tasks
+      if (!selectedTask && userProfile?.role === 'super_admin' && !selectedPracticeId) {
+        setError('Please select a practice for the new task.');
+        return;
+      }
 
       if (selectedTask) {
         // Update existing task
@@ -187,6 +226,10 @@ export const Tasks: React.FC = () => {
         }
       } else {
         // Create new task
+        const targetPracticeId = userProfile?.role === 'super_admin' 
+          ? selectedPracticeId 
+          : userProfile?.practice_id || undefined;
+
         const newTask = await createTask({
           name: taskData.name || '',
           description: taskData.description || '',
@@ -195,7 +238,7 @@ export const Tasks: React.FC = () => {
           policyLink: taskData.policyLink,
           riskRating: taskData.riskRating || 'Medium',
           owner: taskData.owner,
-        });
+        }, targetPracticeId);
 
         if (newTask) {
           // Refresh tasks to include the new one
@@ -208,12 +251,20 @@ export const Tasks: React.FC = () => {
 
       setShowTaskForm(false);
       setSelectedTask(undefined);
+      setSelectedPracticeId('');
     } catch (error) {
       console.error('Error saving task:', error);
       setError('Failed to save task. Please try again.');
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleCancel = () => {
+    setShowTaskForm(false);
+    setSelectedTask(undefined);
+    setSelectedPracticeId('');
+    setError(null);
   };
 
   if (loading) {
@@ -245,15 +296,46 @@ export const Tasks: React.FC = () => {
             <CardTitle>{selectedTask ? 'Edit Task' : 'Add New Task'}</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Practice Selection for Super Admin */}
+            {userProfile?.role === 'super_admin' && !selectedTask && (
+              <div className="mb-6">
+                <label htmlFor="practice-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Practice *
+                </label>
+                <select
+                  id="practice-select"
+                  value={selectedPracticeId}
+                  onChange={(e) => setSelectedPracticeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  required
+                >
+                  <option value="">Select a practice</option>
+                  {practices.map(practice => (
+                    <option key={practice.id} value={practice.id}>
+                      {practice.name} ({practice.email_domain})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-600">
+                  This task will be created for the selected practice.
+                </p>
+              </div>
+            )}
+            
+            {/* Show practice info for existing task edits */}
+            {selectedTask && userProfile?.role === 'super_admin' && selectedTask.practiceName && (
+              <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>Practice:</strong> {selectedTask.practiceName}
+                </p>
+              </div>
+            )}
+
             <TaskForm
               task={selectedTask}
               staffList={staff}
               onSubmit={handleTaskSubmit}
-              onCancel={() => {
-                setShowTaskForm(false);
-                setSelectedTask(undefined);
-                setError(null);
-              }}
+              onCancel={handleCancel}
             />
             {isCreating && (
               <div className="mt-4 flex items-center justify-center">
@@ -318,6 +400,17 @@ export const Tasks: React.FC = () => {
                     >
                       Owner
                     </SortableHeader>
+
+                    {/* Practice column for super admin */}
+                    {userProfile?.role === 'super_admin' && (
+                      <SortableHeader
+                        field="practiceName"
+                        currentSort={sortState}
+                        onSort={handleSort}
+                      >
+                        Practice
+                      </SortableHeader>
+                    )}
                     
                     <SortableHeader
                       field="lastUpdated"
@@ -339,6 +432,14 @@ export const Tasks: React.FC = () => {
                       <TableCell>{task.category}</TableCell>
                       <TableCell><RiskBadge risk={task.riskRating} /></TableCell>
                       <TableCell>{task.owner || '—'}</TableCell>
+                      {/* Practice column for super admin */}
+                      {userProfile?.role === 'super_admin' && (
+                        <TableCell>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {task.practiceName || 'Unknown Practice'}
+                          </span>
+                        </TableCell>
+                      )}
                       <TableCell>
                         {task.updatedAt.toLocaleDateString('en-GB', {
                           day: '2-digit',

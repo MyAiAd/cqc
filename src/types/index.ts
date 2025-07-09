@@ -28,6 +28,9 @@ export interface Task {
   owner?: string;
   createdAt: Date;
   updatedAt: Date;
+  // Optional practice information (only for super admin)
+  practiceName?: string;
+  practiceId?: string;
 }
 
 export interface Staff {
