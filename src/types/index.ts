@@ -36,6 +36,9 @@ export interface Staff {
   email?: string;
   role?: string;
   department?: string;
+  // Optional practice information (only for super admin)
+  practiceName?: string;
+  practiceId?: string;
 }
 
 export interface DashboardSummary {

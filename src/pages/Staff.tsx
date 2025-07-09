@@ -8,7 +8,7 @@ import { useSubscription } from '../contexts/SubscriptionContext';
 import { getStaff, createStaff, getAllPractices } from '../services/dataService';
 import { Staff as StaffType } from '../types';
 
-type SortField = 'name' | 'role' | 'department' | 'email';
+type SortField = 'name' | 'role' | 'department' | 'email' | 'practiceName';
 
 interface SortState {
   field: SortField | null;
@@ -76,6 +76,11 @@ export const Staff: React.FC = () => {
         case 'email':
           aValue = (a.email || '').toLowerCase();
           bValue = (b.email || '').toLowerCase();
+          break;
+        
+        case 'practiceName':
+          aValue = (a.practiceName || '').toLowerCase();
+          bValue = (b.practiceName || '').toLowerCase();
           break;
         
         default:
@@ -359,6 +364,17 @@ export const Staff: React.FC = () => {
                   >
                     Email
                   </TableHeaderCell>
+                  {/* Practice column for super admin */}
+                  {userProfile?.role === 'super_admin' && (
+                    <TableHeaderCell 
+                      isSortable 
+                      isSorted={sortState.field === 'practiceName'}
+                      isSortedDesc={sortState.field === 'practiceName' && sortState.direction === 'desc'}
+                      onSort={() => handleSort('practiceName')}
+                    >
+                      Practice
+                    </TableHeaderCell>
+                  )}
                   <TableHeaderCell>Actions</TableHeaderCell>
                 </TableRow>
               </TableHead>
@@ -369,6 +385,14 @@ export const Staff: React.FC = () => {
                     <TableCell>{member.role || '-'}</TableCell>
                     <TableCell>{member.department || '-'}</TableCell>
                     <TableCell>{member.email || '-'}</TableCell>
+                    {/* Practice column for super admin */}
+                    {userProfile?.role === 'super_admin' && (
+                      <TableCell>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {member.practiceName || 'Unknown Practice'}
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <Button

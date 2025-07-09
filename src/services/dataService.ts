@@ -179,26 +179,96 @@ export const deleteTask = async (taskId: string): Promise<boolean> => {
 
 // Staff
 export const getStaff = async (): Promise<Staff[]> => {
-  const practiceId = await getCurrentPracticeId();
-  if (!practiceId) return [];
+  console.log('=== GET STAFF DEBUG START ===');
+  
+  try {
+    // Get current user to check if they're super admin
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('No authenticated user found');
+      return [];
+    }
 
-  const { data: staff, error } = await supabase
-    .from('staff')
-    .select('*')
-    .eq('practice_id', practiceId);
+    console.log('Step 1: Checking user role...');
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('practice_id, role, email, name')
+      .eq('id', user.id)
+      .single();
 
-  if (error) {
-    console.error('Error fetching staff:', error);
+    if (userError) {
+      console.error('Error fetching user profile:', userError);
+      return [];
+    }
+
+    console.log('User profile:', userProfile);
+    const isSuperAdmin = userProfile?.role === 'super_admin';
+    console.log('Is super admin?', isSuperAdmin);
+
+    let query = supabase.from('staff').select(`
+      *,
+      practice:practices(id, name, email_domain)
+    `);
+
+    if (isSuperAdmin) {
+      console.log('Super admin detected - fetching staff from ALL practices');
+      // Super admin sees all staff from all practices
+      query = query.order('created_at', { ascending: false });
+    } else {
+      console.log('Regular user - fetching staff from their practice only');
+      // Regular users only see staff from their practice
+      const practiceId = userProfile?.practice_id;
+      if (!practiceId) {
+        console.log('No practice ID found for regular user');
+        return [];
+      }
+      query = query.eq('practice_id', practiceId);
+    }
+
+    const { data: staff, error } = await query;
+
+    if (error) {
+      console.error('Error fetching staff:', error);
+      return [];
+    }
+
+    console.log('Step 2: Staff query results...');
+    console.log('Total staff found:', staff?.length || 0);
+    if (isSuperAdmin) {
+      console.log('Staff by practice:');
+      const staffByPractice = staff?.reduce((acc, member) => {
+        const practiceName = member.practice?.name || 'Unknown Practice';
+        if (!acc[practiceName]) acc[practiceName] = 0;
+        acc[practiceName]++;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log(staffByPractice);
+    }
+
+    const result = staff?.map(member => ({
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      department: member.department,
+      // Add practice information for super admin
+      ...(isSuperAdmin && member.practice ? {
+        practiceName: member.practice.name,
+        practiceId: member.practice.id
+      } : {})
+    })) || [];
+
+    console.log('Step 3: Final processed results...');
+    console.log('Processed staff count:', result.length);
+    console.log('=== GET STAFF DEBUG END ===');
+    
+    return result;
+
+  } catch (error) {
+    console.error('=== GET STAFF ERROR ===');
+    console.error('Error details:', error);
     return [];
   }
-
-  return staff?.map(member => ({
-    id: member.id,
-    name: member.name,
-    email: member.email,
-    role: member.role,
-    department: member.department
-  })) || [];
 };
 
 export const createStaff = async (staffData: Omit<Staff, 'id'>, practice_id?: string): Promise<Staff | null> => {
