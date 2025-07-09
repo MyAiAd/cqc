@@ -1,18 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { SkillsMatrixTable } from '../components/skillsMatrix/SkillsMatrixTable';
 import { CategoryFilter } from '../components/skillsMatrix/CategoryFilter';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { TaskForm } from '../components/tasks/TaskForm';
-import { sampleTasks, sampleStaff } from '../data/sampleData';
-import { Task, TaskFrequency } from '../types';
+import { getTasks, getStaff } from '../services/dataService';
+import { Task, Staff, TaskFrequency } from '../types';
 
 export const SkillsMatrix: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>(sampleTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
+  
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tasksData, staffData] = await Promise.all([
+        getTasks(),
+        getStaff()
+      ]);
+      setTasks(tasksData);
+      setStaff(staffData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Extract unique frequencies
   const categories = Array.from(
@@ -20,7 +42,7 @@ export const SkillsMatrix: React.FC = () => {
   ) as TaskFrequency[];
   
   // Extract staff IDs
-  const staffIds = sampleStaff.map(staff => staff.id);
+  const staffIds = staff.map(staff => staff.id);
   
   const handleCategoryChange = (category: string | null) => {
     setSelectedCategory(category);
@@ -36,64 +58,41 @@ export const SkillsMatrix: React.FC = () => {
     setShowTaskForm(true);
   };
   
-  const handleTaskSubmit = (taskData: Partial<Task>) => {
-    if (selectedTask) {
-      // Update existing task
-      const updatedTasks = tasks.map(task => 
-        task.id === selectedTask.id 
-          ? { ...task, ...taskData, updatedAt: new Date() } 
-          : task
-      );
-      setTasks(updatedTasks);
-    } else {
-      // Create new task
-      const newTask: Task = {
-        id: `task-${Date.now()}`,
-        name: taskData.name || '',
-        description: taskData.description || '',
-        category: taskData.category as TaskFrequency || 'Daily',
-        sopLink: taskData.sopLink,
-        policyLink: taskData.policyLink,
-        riskRating: taskData.riskRating || 'Medium',
-        competencies: taskData.competencies || [],
-        owner: taskData.owner,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setTasks([...tasks, newTask]);
-    }
-    
+  const handleTaskSubmit = async (taskData: Partial<Task>) => {
+    // Handle task submission logic here
+    console.log('Task submitted:', taskData);
     setShowTaskForm(false);
     setSelectedTask(undefined);
+    // Reload data to reflect changes
+    await loadData();
   };
-  
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Skills Matrix</h1>
         <Button onClick={handleNewTask} leftIcon={<Plus className="h-4 w-4" />}>
           Add New Task
         </Button>
       </div>
-      
-      <CategoryFilter 
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategoryChange={handleCategoryChange}
-      />
-      
+
       {showTaskForm ? (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {selectedTask ? 'Edit Task' : 'Add New Task'}
-            </CardTitle>
+            <CardTitle>{selectedTask ? 'Edit Task' : 'Add New Task'}</CardTitle>
           </CardHeader>
           <CardContent>
             <TaskForm
               task={selectedTask}
-              staffList={sampleStaff}
+              staffList={staff}
               onSubmit={handleTaskSubmit}
               onCancel={() => {
                 setShowTaskForm(false);
@@ -103,12 +102,24 @@ export const SkillsMatrix: React.FC = () => {
           </CardContent>
         </Card>
       ) : (
-        <SkillsMatrixTable
-          tasks={tasks}
-          selectedCategory={selectedCategory}
-          staffIds={staffIds}
-          onTaskClick={handleTaskClick}
-        />
+        <>
+          <CategoryFilter
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onCategoryChange={handleCategoryChange}
+          />
+          
+          <Card>
+            <CardContent>
+              <SkillsMatrixTable
+                tasks={tasks}
+                staffIds={staffIds}
+                selectedCategory={selectedCategory}
+                onTaskClick={handleTaskClick}
+              />
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
