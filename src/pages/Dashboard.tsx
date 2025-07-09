@@ -15,8 +15,8 @@ import { TasksByRiskChart } from '../components/dashboard/TasksByRiskChart';
 import { CompetencyStatusChart } from '../components/dashboard/CompetencyStatusChart';
 import { RecentTasksTable } from '../components/dashboard/RecentTasksTable';
 import { UsageDashboard } from '../components/subscription/UsageDashboard';
-import { sampleTasks, getDashboardSummary } from '../data/sampleData';
-import { getAllPractices, getGlobalStats } from '../services/dataService';
+import { getAllPractices, getGlobalStats, getTasks, getDashboardStats } from '../services/dataService';
+import { Task } from '../types';
 
 interface GlobalStats {
   totalPractices: number;
@@ -34,18 +34,33 @@ interface Practice {
   updated_at: string;
 }
 
+interface DashboardData {
+  totalTasks: number;
+  highRiskTasks: number;
+  trainingRequired: number;
+  competentCount: number;
+  recentlyUpdated: Task[];
+}
+
 export const Dashboard: React.FC = () => {
   const { userProfile, loading: authLoading } = useAuth();
   const { debugMode } = useDebugMode();
   
-  // Removed focus/blur event listeners to prevent unnecessary logging and potential performance issues
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
   const [practices, setPractices] = useState<Practice[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    totalTasks: 0,
+    highRiskTasks: 0,
+    trainingRequired: 0,
+    competentCount: 0,
+    recentlyUpdated: []
+  });
   const [adminDataLoading, setAdminDataLoading] = useState(false);
+  const [practiceDataLoading, setPracticeDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const adminDataLoadedRef = useRef(false); // Track if admin data has been loaded
-  
-  const [dashboardData] = useState(() => getDashboardSummary()); // Calculate once on mount
+  const adminDataLoadedRef = useRef(false);
+  const practiceDataLoadedRef = useRef(false);
   
   // Memoize the super admin check to prevent unnecessary re-renders
   const isSuperAdmin = useMemo(() => {
@@ -58,20 +73,53 @@ export const Dashboard: React.FC = () => {
   console.log('🎯 DASHBOARD RENDER - Super Admin Status:', isSuperAdmin);
 
   useEffect(() => {
-    // Load admin data only once when the component mounts and user is available
+    // Load data when component mounts and user is available
     const loadInitialData = async () => {
       // Wait for auth to be done loading and user profile to be available
       if (authLoading || !userProfile) return;
       
-      // Only load admin data if user is super admin and hasn't been loaded yet
       if (userProfile.role === 'super_admin' && !adminDataLoading && !adminDataLoadedRef.current) {
-        adminDataLoadedRef.current = true; // Mark as loading to prevent duplicate calls
+        adminDataLoadedRef.current = true;
         await loadAdminData();
+      } else if (userProfile.role !== 'super_admin' && !practiceDataLoading && !practiceDataLoadedRef.current) {
+        practiceDataLoadedRef.current = true;
+        await loadPracticeData();
       }
     };
 
     loadInitialData();
-  }, []); // Empty dependency - run only once on mount
+  }, []);
+
+  const loadPracticeData = useCallback(async () => {
+    setPracticeDataLoading(true);
+    setError(null);
+    
+    try {
+      console.log('Loading practice data...');
+      
+      const [tasksData, dashboardStats] = await Promise.all([
+        getTasks(),
+        getDashboardStats()
+      ]);
+
+      setTasks(tasksData);
+      
+      if (dashboardStats) {
+        setDashboardData({
+          totalTasks: dashboardStats.totalTasks,
+          highRiskTasks: dashboardStats.highRiskTasks,
+          trainingRequired: dashboardStats.trainingRequired,
+          competentCount: dashboardStats.competentCount,
+          recentlyUpdated: tasksData.slice(0, 5) // Show 5 most recent tasks
+        });
+      }
+    } catch (error) {
+      console.error('Error loading practice data:', error);
+      setError('Failed to load practice data');
+    } finally {
+      setPracticeDataLoading(false);
+    }
+  }, []);
 
   // Memoize loadAdminData to prevent unnecessary re-creations
   const loadAdminData = useCallback(async () => {
@@ -111,7 +159,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setAdminDataLoading(false);
     }
-  }, []); // No dependencies - this function should not change
+  }, []);
 
   // Show loading state while auth is loading
   if (authLoading) {
@@ -162,7 +210,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">Error: {error}</p>
           <button 
-            onClick={() => loadAdminData()} 
+            onClick={() => isSuperAdmin ? loadAdminData() : loadPracticeData()} 
             className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
           >
             Retry
@@ -318,40 +366,51 @@ export const Dashboard: React.FC = () => {
           {/* Subscription Usage Dashboard */}
           <UsageDashboard />
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Total Tasks"
-              value={dashboardData.totalTasks}
-              icon={<ListChecks className="h-6 w-6 text-white" />}
-              colorClass="bg-primary-500"
-            />
-            <StatCard
-              title="High Risk Tasks"
-              value={dashboardData.highRiskTasks}
-              icon={<AlertTriangle className="h-6 w-6 text-white" />}
-              colorClass="bg-error-500"
-            />
-            <StatCard
-              title="Training Required"
-              value={dashboardData.trainingRequired}
-              icon={<UserX className="h-6 w-6 text-white" />}
-              colorClass="bg-warning-500"
-            />
-            <StatCard
-              title="Competent Staff"
-              value={12}
-              icon={<Briefcase className="h-6 w-6 text-white" />}
-              colorClass="bg-success-500"
-              description="of 15 skills"
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <TasksByRiskChart tasks={sampleTasks} />
-            <CompetencyStatusChart tasks={sampleTasks} />
-          </div>
-          
-          <RecentTasksTable tasks={dashboardData.recentlyUpdated} />
+          {practiceDataLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading practice data...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  title="Total Tasks"
+                  value={dashboardData.totalTasks}
+                  icon={<ListChecks className="h-6 w-6 text-white" />}
+                  colorClass="bg-primary-500"
+                />
+                <StatCard
+                  title="High Risk Tasks"
+                  value={dashboardData.highRiskTasks}
+                  icon={<AlertTriangle className="h-6 w-6 text-white" />}
+                  colorClass="bg-error-500"
+                />
+                <StatCard
+                  title="Training Required"
+                  value={dashboardData.trainingRequired}
+                  icon={<UserX className="h-6 w-6 text-white" />}
+                  colorClass="bg-warning-500"
+                />
+                <StatCard
+                  title="Competent Staff"
+                  value={dashboardData.competentCount}
+                  icon={<Briefcase className="h-6 w-6 text-white" />}
+                  colorClass="bg-success-500"
+                  description="competencies met"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <TasksByRiskChart tasks={tasks} />
+                <CompetencyStatusChart tasks={tasks} />
+              </div>
+              
+              <RecentTasksTable tasks={dashboardData.recentlyUpdated} />
+            </>
+          )}
         </div>
       )}
     </div>
