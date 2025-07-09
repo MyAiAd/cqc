@@ -84,7 +84,7 @@ export const Tasks: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableHeaderCell>Task Name</TableHeaderCell>
-                  <TableHeaderCell>Category</TableHeaderCell>
+                  <TableHeaderCell>Frequency</TableHeaderCell>
                   <TableHeaderCell>Risk</TableHeaderCell>
                   <TableHeaderCell>Owner</TableHeaderCell>
                   <TableHeaderCell>Last Updated</TableHeaderCell>

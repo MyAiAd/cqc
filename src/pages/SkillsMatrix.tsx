@@ -14,7 +14,7 @@ export const SkillsMatrix: React.FC = () => {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
   
-  // Extract unique categories
+  // Extract unique frequencies
   const categories = Array.from(
     new Set(tasks.map(task => task.category))
   ) as TaskFrequency[];

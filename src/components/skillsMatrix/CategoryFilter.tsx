@@ -15,14 +15,14 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 }) => {
   return (
     <div className="mb-6">
-      <h2 className="text-sm font-medium text-neutral-500 mb-3">Filter by Category</h2>
+      <h2 className="text-sm font-medium text-neutral-500 mb-3">Filter by Frequency</h2>
       <div className="flex flex-wrap gap-2">
         <Button
           variant={selectedCategory === null ? 'primary' : 'outline'}
           size="sm"
           onClick={() => onCategoryChange(null)}
         >
-          All Categories
+          All Frequencies
         </Button>
         
         {categories.map(category => (
