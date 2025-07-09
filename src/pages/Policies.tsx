@@ -234,7 +234,7 @@ export const Policies: React.FC = () => {
         new Date(p.next_review_date) < today
       ).length,
       pending_approvals: policyItems.filter(p => 
-        p.status === 'pending' || p.status === 'submitted' || p.status === 'under_review'
+        p.status === 'pending'
       ).length,
       recently_updated: policyItems.filter(p => {
         const thirtyDaysAgo = new Date();
@@ -567,8 +567,11 @@ export const Policies: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-neutral-600">Pending Approval</p>
+                  <p className="text-sm font-medium text-neutral-600">Pending</p>
                   <p className="text-2xl font-bold text-neutral-900">{stats.pending_approvals}</p>
+                  <p className="text-xs text-neutral-500">
+                    Submitted: {stats.by_status.submitted} | Under Review: {stats.by_status.under_review}
+                  </p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-600" />
               </div>
@@ -591,10 +594,13 @@ export const Policies: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-neutral-600">Overdue Reviews</p>
-                  <p className="text-2xl font-bold text-neutral-900">{stats.overdue_reviews}</p>
+                  <p className="text-sm font-medium text-neutral-600">Approved</p>
+                  <p className="text-2xl font-bold text-neutral-900">{stats.by_status.approved}</p>
+                  <p className="text-xs text-neutral-500">
+                    Overdue: {stats.overdue_reviews} | Rejected: {stats.by_status.rejected}
+                  </p>
                 </div>
-                <AlertTriangle className="h-8 w-8 text-red-600" />
+                <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
