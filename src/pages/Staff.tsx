@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, AlertTriangle, X, Eye, Edit, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
@@ -7,6 +7,44 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { getStaff, createStaff } from '../services/dataService';
 import { Staff as StaffType } from '../types';
+
+type SortField = 'name' | 'role' | 'department' | 'email';
+type SortDirection = 'asc' | 'desc';
+
+interface SortState {
+  field: SortField | null;
+  direction: SortDirection;
+}
+
+interface SortableHeaderProps {
+  children: React.ReactNode;
+  field: SortField;
+  currentSort: SortState;
+  onSort: (field: SortField) => void;
+  className?: string;
+}
+
+const SortableHeader: React.FC<SortableHeaderProps> = ({ 
+  children, 
+  field, 
+  currentSort, 
+  onSort, 
+  className = '' 
+}) => {
+  const isActive = currentSort.field === field;
+  
+  return (
+    <TableHeaderCell 
+      className={className}
+      isSortable={true}
+      isSorted={isActive}
+      isSortedDesc={isActive && currentSort.direction === 'desc'}
+      onSort={() => onSort(field)}
+    >
+      {children}
+    </TableHeaderCell>
+  );
+};
 
 export const Staff: React.FC = () => {
   const { userProfile } = useAuth();
@@ -17,12 +55,62 @@ export const Staff: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortState, setSortState] = useState<SortState>({ field: null, direction: 'asc' });
   const [newStaff, setNewStaff] = useState({
     name: '',
     email: '',
     role: '',
     department: ''
   });
+
+  const handleSort = (field: SortField) => {
+    setSortState(prevState => ({
+      field,
+      direction: prevState.field === field && prevState.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Sort staff based on current sort state
+  const sortedStaff = useMemo(() => {
+    if (!sortState.field) return staff;
+
+    return [...staff].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortState.field) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        
+        case 'role':
+          aValue = (a.role || '').toLowerCase();
+          bValue = (b.role || '').toLowerCase();
+          break;
+        
+        case 'department':
+          aValue = (a.department || '').toLowerCase();
+          bValue = (b.department || '').toLowerCase();
+          break;
+        
+        case 'email':
+          aValue = (a.email || '').toLowerCase();
+          bValue = (b.email || '').toLowerCase();
+          break;
+        
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return sortState.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortState.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [staff, sortState]);
 
   useEffect(() => {
     loadStaff();
@@ -172,15 +260,43 @@ export const Staff: React.FC = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>Role</TableHeaderCell>
-                  <TableHeaderCell>Department</TableHeaderCell>
-                  <TableHeaderCell>Email</TableHeaderCell>
+                  <SortableHeader
+                    field="name"
+                    currentSort={sortState}
+                    onSort={handleSort}
+                  >
+                    Name
+                  </SortableHeader>
+                  
+                  <SortableHeader
+                    field="role"
+                    currentSort={sortState}
+                    onSort={handleSort}
+                  >
+                    Role
+                  </SortableHeader>
+                  
+                  <SortableHeader
+                    field="department"
+                    currentSort={sortState}
+                    onSort={handleSort}
+                  >
+                    Department
+                  </SortableHeader>
+                  
+                  <SortableHeader
+                    field="email"
+                    currentSort={sortState}
+                    onSort={handleSort}
+                  >
+                    Email
+                  </SortableHeader>
+                  
                   <TableHeaderCell>Actions</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {staff.map(member => (
+                {sortedStaff.map(member => (
                   <TableRow key={member.id}>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell>{member.role || '-'}</TableCell>
