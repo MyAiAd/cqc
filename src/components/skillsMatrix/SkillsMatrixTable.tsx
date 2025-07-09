@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { 
   Table, 
@@ -9,7 +9,7 @@ import {
   TableHeaderCell 
 } from '../ui/Table';
 import { RiskBadge, CompetencyBadge } from '../ui/Badge';
-import { Task, StaffCompetency } from '../../types';
+import { Task, StaffCompetency, TaskFrequency, RiskRating } from '../../types';
 
 interface SkillsMatrixTableProps {
   tasks: Task[];
@@ -18,16 +18,116 @@ interface SkillsMatrixTableProps {
   onTaskClick?: (task: Task) => void;
 }
 
+type SortField = 'name' | 'frequency' | 'risk';
+type SortDirection = 'asc' | 'desc';
+
+interface SortState {
+  field: SortField | null;
+  direction: SortDirection;
+}
+
+interface SortableHeaderProps {
+  children: React.ReactNode;
+  field: SortField;
+  currentSort: SortState;
+  onSort: (field: SortField) => void;
+  className?: string;
+}
+
+const SortableHeader: React.FC<SortableHeaderProps> = ({ 
+  children, 
+  field, 
+  currentSort, 
+  onSort, 
+  className = '' 
+}) => {
+  const isActive = currentSort.field === field;
+  
+  return (
+    <TableHeaderCell 
+      className={className}
+      isSortable={true}
+      isSorted={isActive}
+      isSortedDesc={isActive && currentSort.direction === 'desc'}
+      onSort={() => onSort(field)}
+    >
+      {children}
+    </TableHeaderCell>
+  );
+};
+
 export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
   tasks,
   selectedCategory,
   staffIds,
   onTaskClick,
 }) => {
-  // Filter tasks by category if selected
-  const filteredTasks = selectedCategory
-    ? tasks.filter(task => task.category === selectedCategory)
-    : tasks;
+  const [sortState, setSortState] = useState<SortState>({ field: null, direction: 'asc' });
+
+  // Custom sort orders
+  const frequencyOrder: Record<TaskFrequency, number> = {
+    'Continuous': 0,
+    'Daily': 1,
+    'Weekly': 2,
+    'Monthly': 3,
+    'Quarterly': 4
+  };
+
+  const riskOrder: Record<RiskRating, number> = {
+    'Low': 0,
+    'Medium-Low': 1,
+    'Medium': 2,
+    'Medium-High': 3,
+    'High': 4
+  };
+
+  const handleSort = (field: SortField) => {
+    setSortState(prevState => ({
+      field,
+      direction: prevState.field === field && prevState.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Filter and sort tasks
+  const sortedTasks = useMemo(() => {
+    let filtered = selectedCategory
+      ? tasks.filter(task => task.category === selectedCategory)
+      : tasks;
+
+    if (!sortState.field) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortState.field) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        
+        case 'frequency':
+          aValue = frequencyOrder[a.category];
+          bValue = frequencyOrder[b.category];
+          break;
+        
+        case 'risk':
+          aValue = riskOrder[a.riskRating];
+          bValue = riskOrder[b.riskRating];
+          break;
+        
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return sortState.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortState.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [tasks, selectedCategory, sortState, frequencyOrder, riskOrder]);
   
   // Get staff names for the header
   const getStaffNames = (): string[] => {
@@ -52,10 +152,35 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
         <Table>
           <TableHead>
             <TableRow>
-              <TableHeaderCell className="w-1/6">Task Name</TableHeaderCell>
-              <TableHeaderCell className="w-1/6">Frequency</TableHeaderCell>
-              <TableHeaderCell className="w-1/12">Risk</TableHeaderCell>
+              <SortableHeader
+                field="name"
+                currentSort={sortState}
+                onSort={handleSort}
+                className="w-1/6"
+              >
+                Task Name
+              </SortableHeader>
+              
+              <SortableHeader
+                field="frequency"
+                currentSort={sortState}
+                onSort={handleSort}
+                className="w-1/6"
+              >
+                Frequency
+              </SortableHeader>
+              
+              <SortableHeader
+                field="risk"
+                currentSort={sortState}
+                onSort={handleSort}
+                className="w-1/12"
+              >
+                Risk
+              </SortableHeader>
+              
               <TableHeaderCell className="w-1/12">Links</TableHeaderCell>
+              
               {staffNames.map((name, index) => (
                 <TableHeaderCell key={index} className="w-1/6">
                   {name}
@@ -64,7 +189,7 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredTasks.map(task => (
+            {sortedTasks.map(task => (
               <TableRow 
                 key={task.id}
                 onClick={() => onTaskClick && onTaskClick(task)}
@@ -124,11 +249,11 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
               </TableRow>
             ))}
             
-            {filteredTasks.length === 0 && (
+            {sortedTasks.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4 + staffIds.length} className="text-center py-8 text-neutral-500">
+                <td colSpan={4 + staffIds.length} className="px-6 py-8 text-center text-neutral-500">
                   No tasks found
-                </TableCell>
+                </td>
               </TableRow>
             )}
           </TableBody>
