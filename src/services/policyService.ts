@@ -11,7 +11,8 @@ import {
   UpdatePolicyRequest,
   PolicyComment,
   PolicyType,
-  PolicyCategory
+  PolicyCategory,
+  ReviewFrequency
 } from '../types/policy';
 import {
   EvidenceItem,
@@ -44,12 +45,40 @@ class PolicyService {
     console.log('Evidence types found:', result.items.map(item => item.evidence_type));
     
     // Filter and transform results for policy-specific data
-    let policies = result.items.filter(item => 
-      item.evidence_type === 'policy' || item.evidence_type === 'procedure'
-    ) as PolicyItem[];
+    let policies = result.items
+      .filter(item => 
+        item.evidence_type === 'policy' || item.evidence_type === 'procedure'
+      )
+      .map(item => {
+        // Transform evidence item to policy item by adding missing fields
+        const policyItem: PolicyItem = {
+          ...item,
+          // Override evidence_type to match PolicyItem requirements
+          evidence_type: item.evidence_type === 'procedure' ? 'procedure' : 'policy',
+          // Map evidence_type to policy_type
+          policy_type: item.evidence_type === 'procedure' ? 'procedure' : 'policy',
+          // Add default values for missing required fields
+          policy_category: (item as any).policy_category || 'other' as PolicyCategory,
+          version: (item as any).version || '1.0',
+          effective_date: item.evidence_date || item.created_at,
+          review_frequency: (item as any).review_frequency || 'annually' as ReviewFrequency,
+          next_review_date: item.next_review_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+          // Optional fields
+          approved_by: (item as any).approved_by,
+          approval_date: (item as any).approval_date,
+          supersedes: (item as any).supersedes,
+          related_policies: (item as any).related_policies || [],
+          training_required: (item as any).training_required || false,
+          mandatory_reading: (item as any).mandatory_reading || false,
+          distribution_list: (item as any).distribution_list || []
+        };
+        
+        return policyItem;
+      });
     
     console.log('Filtered policies count:', policies.length);
     console.log('Policy evidence types:', policies.map(p => p.evidence_type));
+    console.log('Policy types mapped:', policies.map(p => p.policy_type));
 
     // Apply policy-specific filters
     if (filters?.policy_type?.length) {
@@ -161,7 +190,7 @@ class PolicyService {
 
   async addComment(id: string, comment: string, type: 'general' | 'review' | 'approval' | 'rejection' = 'general'): Promise<void> {
     // Use evidence service comment functionality
-    return evidenceService.addComment(id, comment);
+    await evidenceService.addComment(id, comment);
   }
 
   async downloadPolicy(id: string): Promise<Blob> {
