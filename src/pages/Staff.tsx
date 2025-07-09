@@ -1,29 +1,128 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, X, Eye, Edit, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } from '../components/ui/Table';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { sampleStaff } from '../data/sampleData';
+import { getStaff, createStaff } from '../services/dataService';
+import { Staff as StaffType } from '../types';
 
 export const Staff: React.FC = () => {
   const { userProfile } = useAuth();
-  const { canAddStaff } = useSubscription();
+  const { canAddStaff, refreshSubscription } = useSubscription();
+  const [staff, setStaff] = useState<StaffType[]>([]);
+  const [loading, setLoading] = useState(true);
   const [canCreateStaff, setCanCreateStaff] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newStaff, setNewStaff] = useState({
+    name: '',
+    email: '',
+    role: '',
+    department: ''
+  });
 
   useEffect(() => {
-    const checkStaffLimit = async () => {
+    loadStaff();
+    checkStaffLimit();
+  }, [userProfile]);
+
+  const loadStaff = async () => {
+    try {
+      setLoading(true);
+      const staffData = await getStaff();
+      setStaff(staffData);
+    } catch (error) {
+      console.error('Error loading staff:', error);
+      setError('Failed to load staff members');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkStaffLimit = async () => {
+    if (userProfile?.role !== 'super_admin') {
+      const canAdd = await canAddStaff();
+      setCanCreateStaff(canAdd);
+    }
+  };
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setIsCreating(true);
+      setError(null);
+
+      // Check subscription limits for non-super admins
       if (userProfile?.role !== 'super_admin') {
         const canAdd = await canAddStaff();
-        setCanCreateStaff(canAdd);
+        if (!canAdd) {
+          setError('Staff limit reached for your subscription plan. Please upgrade to add more staff members.');
+          return;
+        }
       }
-    };
 
-    if (userProfile) {
-      checkStaffLimit();
+      // Validate required fields
+      if (!newStaff.name.trim()) {
+        setError('Please enter a staff member name.');
+        return;
+      }
+
+      const createdStaff = await createStaff({
+        name: newStaff.name.trim(),
+        email: newStaff.email.trim() || undefined,
+        role: newStaff.role.trim() || undefined,
+        department: newStaff.department.trim() || undefined,
+      });
+
+      if (createdStaff) {
+        // Refresh the staff list
+        await loadStaff();
+        
+        // Refresh subscription data to update usage counts
+        await refreshSubscription();
+        
+        // Check if user can still add more staff
+        await checkStaffLimit();
+        
+        // Reset form and close modal
+        setNewStaff({
+          name: '',
+          email: '',
+          role: '',
+          department: ''
+        });
+        setShowCreateModal(false);
+      }
+    } catch (error) {
+      console.error('Error creating staff:', error);
+      setError('Error creating staff member. Please try again.');
+    } finally {
+      setIsCreating(false);
     }
-  }, []); // Empty dependency - run only once on mount when userProfile is available
+  };
+
+  const resetModal = () => {
+    setShowCreateModal(false);
+    setNewStaff({
+      name: '',
+      email: '',
+      role: '',
+      department: ''
+    });
+    setError(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -40,6 +139,7 @@ export const Staff: React.FC = () => {
             leftIcon={<Plus className="h-4 w-4" />}
             disabled={!canCreateStaff && userProfile?.role !== 'super_admin'}
             className={!canCreateStaff && userProfile?.role !== 'super_admin' ? 'opacity-50 cursor-not-allowed' : ''}
+            onClick={() => setShowCreateModal(true)}
           >
             Add Staff Member
           </Button>
@@ -48,28 +148,180 @@ export const Staff: React.FC = () => {
 
       <Card>
         <CardContent>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Role</TableHeaderCell>
-                <TableHeaderCell>Department</TableHeaderCell>
-                <TableHeaderCell>Email</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sampleStaff.map(staff => (
-                <TableRow key={staff.id}>
-                  <TableCell className="font-medium">{staff.name}</TableCell>
-                  <TableCell>{staff.role}</TableCell>
-                  <TableCell>{staff.department}</TableCell>
-                  <TableCell>{staff.email}</TableCell>
+          {staff.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No staff members found</h3>
+              <p className="text-gray-600 mb-4">
+                Get started by adding your first staff member.
+              </p>
+              {(canCreateStaff || userProfile?.role === 'super_admin') && (
+                <Button
+                  leftIcon={<Plus className="h-4 w-4" />}
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  Add Staff Member
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Name</TableHeaderCell>
+                  <TableHeaderCell>Role</TableHeaderCell>
+                  <TableHeaderCell>Department</TableHeaderCell>
+                  <TableHeaderCell>Email</TableHeaderCell>
+                  <TableHeaderCell>Actions</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {staff.map(member => (
+                  <TableRow key={member.id}>
+                    <TableCell className="font-medium">{member.name}</TableCell>
+                    <TableCell>{member.role || '-'}</TableCell>
+                    <TableCell>{member.department || '-'}</TableCell>
+                    <TableCell>{member.email || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Edit Staff Member"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Delete Staff Member"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
+
+      {/* Create Staff Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Staff Member</h3>
+              <button
+                onClick={resetModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStaff} className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={newStaff.name}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={newStaff.email}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="user@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <input
+                  type="text"
+                  id="role"
+                  value={newStaff.role}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="e.g., Nurse, Doctor, Admin"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  id="department"
+                  value={newStaff.department}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, department: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="e.g., Clinical, Administrative"
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-800 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> This will add a staff member to your practice directory for task assignments and competency tracking.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetModal}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isCreating}
+                >
+                  {isCreating ? 'Creating...' : 'Create Staff Member'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
