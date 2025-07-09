@@ -14,7 +14,16 @@ if (!supabaseUrl || !supabaseKey ||
   // Create a dummy client with placeholder values to prevent immediate errors
   supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
 } else {
-  supabase = createClient(supabaseUrl, supabaseKey);
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      // Reduce aggressive token refresh behavior
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      // Increase token refresh threshold to reduce frequency
+      flowType: 'pkce'
+    }
+  });
 }
 
 export { supabase };

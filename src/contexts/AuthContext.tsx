@@ -218,7 +218,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🔥 AUTH STATE CHANGE - Current Profile:', userProfile?.email, userProfile?.role);
         console.log('🔥 AUTH STATE CHANGE - Timestamp:', new Date().toISOString());
         
-        setLoading(true); // Start loading when auth state changes
+        // Only set loading for significant auth changes, not token refresh
+        if (event !== 'TOKEN_REFRESHED') {
+          setLoading(true); // Start loading when auth state changes
+        }
         setUser(session?.user ?? null);
         
         if (event === 'SIGNED_IN' && session?.user) {
@@ -226,22 +229,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchUserProfile(session.user.id);
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
           console.log('Handling TOKEN_REFRESHED event');
-          // For token refresh, only refetch profile if we don't have one or if it failed before
-          if (!userProfile) {
-            console.log('No existing profile, fetching...');
-            await fetchUserProfile(session.user.id);
-          } else {
-            console.log('Profile exists, skipping refetch to prevent losing super admin status');
-            // Just verify the session is still valid without refetching profile
-            console.log('Keeping existing profile:', userProfile.email, userProfile.role);
-          }
+          // For token refresh, don't refetch profile or reload anything
+          // Just update the user object and keep everything else as-is
+          console.log('Token refreshed, keeping existing profile to prevent unnecessary reloads');
+          console.log('Keeping existing profile:', userProfile?.email, userProfile?.role);
+          // Don't call fetchUserProfile or do any other work - just update the user
         } else if (event === 'SIGNED_OUT') {
           console.log('Handling SIGNED_OUT event');
           setUserProfile(null);
           setPractice(null);
         }
         
-        setLoading(false); // Finish loading after updates
+        // Only set loading to false for significant auth changes, not token refresh
+        if (event !== 'TOKEN_REFRESHED') {
+          setLoading(false); // Finish loading after updates
+        }
         console.log('=== AUTH STATE CHANGE COMPLETE ===');
       });
 

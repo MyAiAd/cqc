@@ -38,24 +38,7 @@ export const Dashboard: React.FC = () => {
   const { userProfile, loading: authLoading } = useAuth();
   const { debugMode } = useDebugMode();
   
-  // Add focus event listener to detect when tab is switched
-  useEffect(() => {
-    const handleFocus = () => {
-      console.log('🏠 DASHBOARD - Window focused at:', new Date().toISOString());
-    };
-    
-    const handleBlur = () => {
-      console.log('🏠 DASHBOARD - Window blurred at:', new Date().toISOString());
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
-    
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
-    };
-  }, []);
+  // Removed focus/blur event listeners to prevent unnecessary logging and potential performance issues
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
   const [practices, setPractices] = useState<Practice[]>([]);
   const [adminDataLoading, setAdminDataLoading] = useState(false);
