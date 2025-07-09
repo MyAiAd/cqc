@@ -28,8 +28,10 @@ import { Table, TableHead, TableBody, TableRow, TableCell, TableHeaderCell } fro
 import { EvidenceUploadModal } from '../components/evidence/EvidenceUploadModal';
 import { EvidenceViewModal } from '../components/evidence/EvidenceViewModal';
 import { EvidenceCommentModal } from '../components/evidence/EvidenceCommentModal';
+import { StatusManager } from '../components/policy/StatusManager';
 import { useAuth } from '../contexts/AuthContext';
 import { policyService } from '../services/policyService';
+import { debugReviewStats } from '../utils/debugReviewStats';
 import { 
   PolicyItem, 
   PolicyStats, 
@@ -248,6 +250,9 @@ export const Policies: React.FC = () => {
       under_review: policyItems.filter(p => p.status === 'under_review').length,
       total_pending_approvals: stats.pending_approvals
     });
+
+    // Debug review stats
+    debugReviewStats(policyItems, 'policies');
 
     return stats;
   }, []);
@@ -719,12 +724,11 @@ export const Policies: React.FC = () => {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center">
-                      {getStatusIcon(policy.status)}
-                      <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${policyService.getStatusColor(policy.status)}`}>
-                        {policy.status.replace('_', ' ')}
-                      </span>
-                    </div>
+                    <StatusManager
+                      currentStatus={policy.status}
+                      onStatusChange={(newStatus) => handleStatusUpdate(policy.id, newStatus)}
+                      isAdmin={userProfile?.role === 'admin' || userProfile?.role === 'super_admin'}
+                    />
                   </TableCell>
                   <TableCell>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${policyService.getComplianceColor(policy.compliance_status)}`}>
