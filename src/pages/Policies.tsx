@@ -18,7 +18,9 @@ import {
   BookOpen,
   Shield,
   Users,
-  Calendar
+  Calendar,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -61,6 +63,107 @@ export const Policies: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Sorting function
+  const sortPolicies = useCallback((policiesToSort: PolicyItem[], column: string, direction: 'asc' | 'desc') => {
+    return [...policiesToSort].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (column) {
+        case 'title':
+          aValue = a.title.toLowerCase();
+          bValue = b.title.toLowerCase();
+          break;
+        case 'policy_type':
+          aValue = a.policy_type;
+          bValue = b.policy_type;
+          break;
+        case 'policy_category':
+          aValue = a.policy_category;
+          bValue = b.policy_category;
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case 'compliance_status':
+          aValue = a.compliance_status;
+          bValue = b.compliance_status;
+          break;
+        case 'version':
+          aValue = a.version || 'v1.0';
+          bValue = b.version || 'v1.0';
+          break;
+        case 'next_review_date':
+          aValue = a.next_review_date ? new Date(a.next_review_date) : new Date(0);
+          bValue = b.next_review_date ? new Date(b.next_review_date) : new Date(0);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, []);
+
+  // Handle sort
+  const handleSort = (column: string) => {
+    let newDirection: 'asc' | 'desc' = 'asc';
+    
+    if (sortColumn === column) {
+      newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    }
+    
+    setSortColumn(column);
+    setSortDirection(newDirection);
+    
+    const sortedPolicies = sortPolicies(policies, column, newDirection);
+    setPolicies(sortedPolicies);
+  };
+
+  // Sort indicator component
+  const SortIndicator: React.FC<{ column: string }> = ({ column }) => {
+    if (sortColumn !== column) {
+      return (
+        <div className="flex flex-col ml-1">
+          <ChevronUp className="h-3 w-3 text-gray-400" />
+          <ChevronDown className="h-3 w-3 text-gray-400 -mt-1" />
+        </div>
+      );
+    }
+    
+    return (
+      <div className="ml-1">
+        {sortDirection === 'asc' ? (
+          <ChevronUp className="h-3 w-3 text-gray-600" />
+        ) : (
+          <ChevronDown className="h-3 w-3 text-gray-600" />
+        )}
+      </div>
+    );
+  };
+
+  // Sortable header component
+  const SortableHeader: React.FC<{ column: string; children: React.ReactNode }> = ({ column, children }) => {
+    return (
+      <TableHeaderCell>
+        <button
+          onClick={() => handleSort(column)}
+          className="flex items-center justify-between w-full text-left hover:bg-gray-50 px-2 py-1 rounded transition-colors"
+        >
+          <span>{children}</span>
+          <SortIndicator column={column} />
+        </button>
+      </TableHeaderCell>
+    );
+  };
+
   useEffect(() => {
     console.log('=== POLICIES USEEFFECT TRIGGERED ===');
     const loadInitialData = async () => {
@@ -80,7 +183,14 @@ export const Policies: React.FC = () => {
         
         console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
         console.log('=== POLICIES DATA ===', policiesResult.policies);
-        setPolicies(policiesResult.policies);
+        
+        // Apply current sort if any
+        let sortedPolicies = policiesResult.policies;
+        if (sortColumn) {
+          sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
+        }
+        
+        setPolicies(sortedPolicies);
         setStats(statsResult);
       } catch (error) {
         console.error('=== ERROR LOADING POLICY DATA ===', error);
@@ -106,7 +216,7 @@ export const Policies: React.FC = () => {
     };
 
     loadInitialData();
-  }, []); // Empty dependency array - runs only once on mount
+  }, [sortColumn, sortDirection, sortPolicies]); // Added dependencies for sorting
 
   const loadData = useCallback(async () => {
     try {
@@ -126,7 +236,14 @@ export const Policies: React.FC = () => {
       
       console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
       console.log('=== POLICIES DATA ===', policiesResult.policies);
-      setPolicies(policiesResult.policies);
+      
+      // Apply current sort if any
+      let sortedPolicies = policiesResult.policies;
+      if (sortColumn) {
+        sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
+      }
+      
+      setPolicies(sortedPolicies);
       setStats(statsResult);
     } catch (error) {
       console.error('=== ERROR LOADING POLICY DATA ===', error);
@@ -149,7 +266,7 @@ export const Policies: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, sortColumn, sortDirection, sortPolicies]);
 
   const refreshData = useCallback(async () => {
     try {
@@ -165,14 +282,21 @@ export const Policies: React.FC = () => {
         policyService.getPolicies(combinedFilters),
         policyService.getPolicyStats()
       ]);
-      setPolicies(policiesResult.policies);
+      
+      // Apply current sort if any
+      let sortedPolicies = policiesResult.policies;
+      if (sortColumn) {
+        sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
+      }
+      
+      setPolicies(sortedPolicies);
       setStats(statsResult);
     } catch (error) {
       console.error('Error refreshing policy data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, sortColumn, sortDirection, sortPolicies]);
 
   useEffect(() => {
     if (Object.keys(filters).length > 0) {
@@ -489,13 +613,13 @@ export const Policies: React.FC = () => {
                     className="rounded border-neutral-300"
                   />
                 </TableHeaderCell>
-                <TableHeaderCell>Policy</TableHeaderCell>
-                <TableHeaderCell>Type</TableHeaderCell>
-                <TableHeaderCell>Category</TableHeaderCell>
-                <TableHeaderCell>Status</TableHeaderCell>
-                <TableHeaderCell>Compliance</TableHeaderCell>
-                <TableHeaderCell>Version</TableHeaderCell>
-                <TableHeaderCell>Next Review</TableHeaderCell>
+                <SortableHeader column="title">Policy</SortableHeader>
+                <SortableHeader column="policy_type">Type</SortableHeader>
+                <SortableHeader column="policy_category">Category</SortableHeader>
+                <SortableHeader column="status">Status</SortableHeader>
+                <SortableHeader column="compliance_status">Compliance</SortableHeader>
+                <SortableHeader column="version">Version</SortableHeader>
+                <SortableHeader column="next_review_date">Next Review</SortableHeader>
                 <TableHeaderCell>Actions</TableHeaderCell>
               </TableRow>
             </TableHead>
