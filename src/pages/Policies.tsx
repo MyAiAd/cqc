@@ -66,6 +66,7 @@ export const Policies: React.FC = () => {
   // Sorting state
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [unsortedPolicies, setUnsortedPolicies] = useState<PolicyItem[]>([]);
 
   // Sorting function
   const sortPolicies = useCallback((policiesToSort: PolicyItem[], column: string, direction: 'asc' | 'desc') => {
@@ -122,10 +123,17 @@ export const Policies: React.FC = () => {
     
     setSortColumn(column);
     setSortDirection(newDirection);
-    
-    const sortedPolicies = sortPolicies(policies, column, newDirection);
-    setPolicies(sortedPolicies);
   };
+
+  // Apply sorting whenever data or sort criteria changes
+  useEffect(() => {
+    if (sortColumn) {
+      const sortedPolicies = sortPolicies(unsortedPolicies, sortColumn, sortDirection);
+      setPolicies(sortedPolicies);
+    } else {
+      setPolicies(unsortedPolicies);
+    }
+  }, [unsortedPolicies, sortColumn, sortDirection, sortPolicies]);
 
   // Sort indicator component
   const SortIndicator: React.FC<{ column: string }> = ({ column }) => {
@@ -184,13 +192,7 @@ export const Policies: React.FC = () => {
         console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
         console.log('=== POLICIES DATA ===', policiesResult.policies);
         
-        // Apply current sort if any
-        let sortedPolicies = policiesResult.policies;
-        if (sortColumn) {
-          sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
-        }
-        
-        setPolicies(sortedPolicies);
+        setUnsortedPolicies(policiesResult.policies);
         setStats(statsResult);
       } catch (error) {
         console.error('=== ERROR LOADING POLICY DATA ===', error);
@@ -216,7 +218,7 @@ export const Policies: React.FC = () => {
     };
 
     loadInitialData();
-  }, [sortColumn, sortDirection, sortPolicies]); // Added dependencies for sorting
+  }, []); // Removed sorting dependencies to prevent unnecessary reloads
 
   const loadData = useCallback(async () => {
     try {
@@ -237,13 +239,7 @@ export const Policies: React.FC = () => {
       console.log('=== POLICIES LOADED ===', policiesResult.policies.length);
       console.log('=== POLICIES DATA ===', policiesResult.policies);
       
-      // Apply current sort if any
-      let sortedPolicies = policiesResult.policies;
-      if (sortColumn) {
-        sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
-      }
-      
-      setPolicies(sortedPolicies);
+      setUnsortedPolicies(policiesResult.policies);
       setStats(statsResult);
     } catch (error) {
       console.error('=== ERROR LOADING POLICY DATA ===', error);
@@ -266,7 +262,7 @@ export const Policies: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, sortColumn, sortDirection, sortPolicies]);
+  }, [filters]); // Removed applySortToPolicies dependency
 
   const refreshData = useCallback(async () => {
     try {
@@ -283,20 +279,14 @@ export const Policies: React.FC = () => {
         policyService.getPolicyStats()
       ]);
       
-      // Apply current sort if any
-      let sortedPolicies = policiesResult.policies;
-      if (sortColumn) {
-        sortedPolicies = sortPolicies(policiesResult.policies, sortColumn, sortDirection);
-      }
-      
-      setPolicies(sortedPolicies);
+      setUnsortedPolicies(policiesResult.policies);
       setStats(statsResult);
     } catch (error) {
       console.error('Error refreshing policy data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filters, sortColumn, sortDirection, sortPolicies]);
+  }, [filters]); // Removed applySortToPolicies dependency
 
   useEffect(() => {
     if (Object.keys(filters).length > 0) {
