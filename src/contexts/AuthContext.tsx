@@ -50,11 +50,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Use refs to avoid stale closures in auth state change handler
   const userProfileRef = useRef<UserProfile | null>(null);
   const fetchingProfileRef = useRef<boolean>(false);
-  const lastSignInRef = useRef<number>(0);
+  const lastProfileSetRef = useRef<number>(0);
 
   // Update refs when state changes
   useEffect(() => {
     userProfileRef.current = userProfile;
+    // Track when profile is set
+    if (userProfile) {
+      lastProfileSetRef.current = Date.now();
+    }
   }, [userProfile]);
 
   useEffect(() => {
@@ -209,25 +213,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check if this is a "fake" SIGNED_IN event that should be treated as a token refresh
     // This happens when the tab regains focus and Supabase re-establishes the session
     const now = Date.now();
-    const timeSinceLastSignIn = now - lastSignInRef.current;
+    const timeSinceLastProfileSet = now - lastProfileSetRef.current;
     const isFakeSignIn = event === 'SIGNED_IN' && 
                          session?.user && 
                          userProfileRef.current && 
                          session.user.id === userProfileRef.current.id &&
-                         timeSinceLastSignIn < 60000; // Less than 1 minute since last sign-in
+                         timeSinceLastProfileSet < 60000; // Less than 1 minute since last profile set
     
     if (isFakeSignIn) {
       console.log('Detected fake SIGNED_IN event - treating as token refresh');
-      console.log('Time since last sign-in:', timeSinceLastSignIn, 'ms');
+      console.log('Time since last profile set:', timeSinceLastProfileSet, 'ms');
       // Just update the user object, don't refetch profile or set loading
       setUser(session?.user ?? null);
       console.log('=== AUTH STATE CHANGE COMPLETE (fake sign-in) ===');
       return;
-    }
-    
-    // Track genuine sign-ins
-    if (event === 'SIGNED_IN') {
-      lastSignInRef.current = now;
     }
     
     // Only set loading for significant auth changes, not token refresh
