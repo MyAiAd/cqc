@@ -72,24 +72,6 @@ export const Dashboard: React.FC = () => {
   console.log('🎯 DASHBOARD RENDER - Auth Loading:', authLoading, 'Admin Loading:', adminDataLoading);
   console.log('🎯 DASHBOARD RENDER - Super Admin Status:', isSuperAdmin);
 
-  useEffect(() => {
-    // Load data when component mounts and user is available
-    const loadInitialData = async () => {
-      // Wait for auth to be done loading and user profile to be available
-      if (authLoading || !userProfile) return;
-      
-      if (userProfile.role === 'super_admin' && !adminDataLoading && !adminDataLoadedRef.current) {
-        adminDataLoadedRef.current = true;
-        await loadAdminData();
-      } else if (userProfile.role !== 'super_admin' && !practiceDataLoading && !practiceDataLoadedRef.current) {
-        practiceDataLoadedRef.current = true;
-        await loadPracticeData();
-      }
-    };
-
-    loadInitialData();
-  }, []);
-
   const loadPracticeData = useCallback(async () => {
     setPracticeDataLoading(true);
     setError(null);
@@ -160,6 +142,85 @@ export const Dashboard: React.FC = () => {
       setAdminDataLoading(false);
     }
   }, []);
+
+  // Reset loaded refs when user role changes to prevent stale state
+  useEffect(() => {
+    if (userProfile?.role) {
+      // Reset the opposite role's loaded ref when role changes
+      if (userProfile.role === 'super_admin') {
+        practiceDataLoadedRef.current = false;
+      } else {
+        adminDataLoadedRef.current = false;
+      }
+    }
+  }, [userProfile?.role]);
+
+  useEffect(() => {
+    // Only load data once when component mounts and user is available
+    const loadInitialData = async () => {
+      // Wait for auth to be done loading and user profile to be available
+      if (authLoading || !userProfile) {
+        console.log('🔄 Skipping data load - auth loading or no user profile');
+        return;
+      }
+      
+      console.log('🔄 Checking if data needs to be loaded...', {
+        role: userProfile.role,
+        adminDataLoaded: adminDataLoadedRef.current,
+        adminDataLoading,
+        hasGlobalStats: !!globalStats,
+        practiceDataLoaded: practiceDataLoadedRef.current,
+        practiceDataLoading,
+        tasksCount: tasks.length
+      });
+      
+      // Use a more robust check to prevent redundant loading
+      if (userProfile.role === 'super_admin') {
+        if (!adminDataLoadedRef.current && !adminDataLoading && !globalStats) {
+          console.log('🚀 Loading admin data for the first time...');
+          adminDataLoadedRef.current = true;
+          await loadAdminData();
+        } else {
+          console.log('⏭️ Skipping admin data load - already loaded or loading');
+        }
+      } else {
+        if (!practiceDataLoadedRef.current && !practiceDataLoading && tasks.length === 0) {
+          console.log('🚀 Loading practice data for the first time...');
+          practiceDataLoadedRef.current = true;
+          await loadPracticeData();
+        } else {
+          console.log('⏭️ Skipping practice data load - already loaded or loading');
+        }
+      }
+    };
+
+    loadInitialData();
+  }, [authLoading, userProfile?.role]); // Only depend on essential values
+
+  // Failsafe: Reset loading states if they get stuck
+  useEffect(() => {
+    const resetStuckLoading = () => {
+      if (adminDataLoading || practiceDataLoading) {
+        console.log('⚠️ Checking for stuck loading states...');
+        
+        // If we have data but still loading, reset the loading state
+        if (adminDataLoading && globalStats && practices.length > 0) {
+          console.log('⚠️ Admin data is loaded but loading state is stuck - resetting');
+          setAdminDataLoading(false);
+        }
+        
+        if (practiceDataLoading && tasks.length > 0) {
+          console.log('⚠️ Practice data is loaded but loading state is stuck - resetting');
+          setPracticeDataLoading(false);
+        }
+      }
+    };
+
+    // Check for stuck loading states after a delay
+    const timer = setTimeout(resetStuckLoading, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [adminDataLoading, practiceDataLoading, globalStats, practices.length, tasks.length]);
 
   // Show loading state while auth is loading
   if (authLoading) {
