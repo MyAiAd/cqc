@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -47,6 +47,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [fetchingProfile, setFetchingProfile] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
+  // Use refs to avoid stale closures in auth state change handler
+  const userProfileRef = useRef<UserProfile | null>(null);
+  const fetchingProfileRef = useRef<boolean>(false);
+
+  // Update refs when state changes
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
+
+  useEffect(() => {
+    fetchingProfileRef.current = fetchingProfile;
+  }, [fetchingProfile]);
+
   // Check if Supabase is properly configured
   const checkSupabaseConfig = () => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -60,9 +73,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
-  const fetchUserProfile = async (userId: string, retryCount = 0): Promise<boolean> => {
+  const fetchUserProfile = useCallback(async (userId: string, retryCount = 0): Promise<boolean> => {
     // Prevent multiple simultaneous fetches
-    if (fetchingProfile) {
+    if (fetchingProfileRef.current) {
       console.log('Profile fetch already in progress, skipping...');
       return false;
     }
@@ -125,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // If this is a token refresh and we already have a profile, don't clear it
         // This prevents losing super admin status due to temporary RLS issues
-        if (userProfile && retryCount > 0) {
+        if (userProfileRef.current && retryCount > 0) {
           console.log('Keeping existing profile due to fetch error during refresh');
           return true; // Return true to indicate we're keeping the existing profile
         }
@@ -184,10 +197,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('=== FETCHUSERPROFILE COMPLETE ===');
       setFetchingProfile(false);
     }
-  };
+  }, []);
+
+  // Memoize the auth state change handler to prevent unnecessary re-creation
+  const handleAuthStateChange = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
+    console.log('🔥 AUTH STATE CHANGE - Event:', event, 'User:', session?.user?.email);
+    console.log('🔥 AUTH STATE CHANGE - Current Profile:', userProfileRef.current?.email, userProfileRef.current?.role);
+    console.log('🔥 AUTH STATE CHANGE - Timestamp:', new Date().toISOString());
+    
+    // Only set loading for significant auth changes, not token refresh
+    if (event !== 'TOKEN_REFRESHED') {
+      setLoading(true);
+    }
+    setUser(session?.user ?? null);
+    
+    if (event === 'SIGNED_IN' && session?.user) {
+      console.log('Handling SIGNED_IN event');
+      await fetchUserProfile(session.user.id);
+    } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+      console.log('Handling TOKEN_REFRESHED event');
+      // For token refresh, don't refetch profile or reload anything
+      // Just update the user object and keep everything else as-is
+      console.log('Token refreshed, keeping existing profile to prevent unnecessary reloads');
+      console.log('Keeping existing profile:', userProfileRef.current?.email, userProfileRef.current?.role);
+      // Don't call fetchUserProfile or do any other work - just update the user
+    } else if (event === 'SIGNED_OUT') {
+      console.log('Handling SIGNED_OUT event');
+      setUserProfile(null);
+      setPractice(null);
+    }
+    
+    // Only set loading to false for significant auth changes, not token refresh
+    if (event !== 'TOKEN_REFRESHED') {
+      setLoading(false);
+    }
+    console.log('=== AUTH STATE CHANGE COMPLETE ===');
+  }, [fetchUserProfile]);
 
   useEffect(() => {
     let mounted = true;
+    let isVisible = !document.hidden;
+
+    // Handle visibility change to prevent unnecessary operations when tab is not visible
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        console.log('Tab became visible - user returned to app');
+      } else {
+        console.log('Tab became hidden - user switched away');
+      }
+    };
 
     const initialize = async () => {
       // Check Supabase configuration first
@@ -210,45 +269,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
       
-      // Set up auth state change listener
+      // Set up auth state change listener with visibility check
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
         
-        console.log('🔥 AUTH STATE CHANGE - Event:', event, 'User:', session?.user?.email);
-        console.log('🔥 AUTH STATE CHANGE - Current Profile:', userProfile?.email, userProfile?.role);
-        console.log('🔥 AUTH STATE CHANGE - Timestamp:', new Date().toISOString());
-        
-        // Only set loading for significant auth changes, not token refresh
-        if (event !== 'TOKEN_REFRESHED') {
-          setLoading(true); // Start loading when auth state changes
-        }
-        setUser(session?.user ?? null);
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          console.log('Handling SIGNED_IN event');
-          await fetchUserProfile(session.user.id);
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          console.log('Handling TOKEN_REFRESHED event');
-          // For token refresh, don't refetch profile or reload anything
-          // Just update the user object and keep everything else as-is
-          console.log('Token refreshed, keeping existing profile to prevent unnecessary reloads');
-          console.log('Keeping existing profile:', userProfile?.email, userProfile?.role);
-          // Don't call fetchUserProfile or do any other work - just update the user
-        } else if (event === 'SIGNED_OUT') {
-          console.log('Handling SIGNED_OUT event');
-          setUserProfile(null);
-          setPractice(null);
+        // Skip unnecessary operations when tab is not visible (except for sign out)
+        if (!isVisible && event !== 'SIGNED_OUT') {
+          console.log('Skipping auth state change processing - tab not visible');
+          return;
         }
         
-        // Only set loading to false for significant auth changes, not token refresh
-        if (event !== 'TOKEN_REFRESHED') {
-          setLoading(false); // Finish loading after updates
-        }
-        console.log('=== AUTH STATE CHANGE COMPLETE ===');
+        await handleAuthStateChange(event, session);
       });
+
+      // Add visibility change listener
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       return () => {
         mounted = false;
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         subscription?.unsubscribe();
       };
     };
@@ -258,7 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
     };
-  }, []);
+  }, [fetchUserProfile, handleAuthStateChange]);
 
   const signIn = async (email: string) => {
     try {
