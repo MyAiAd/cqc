@@ -127,6 +127,8 @@ export const getTasks = async (): Promise<Task[]> => {
       category: task.category as Task['category'],
       sopLink: task.sop_link,
       policyLink: task.policy_link,
+      sopDocumentId: task.sop_document_id,
+      policyDocumentId: task.policy_document_id,
       riskRating: task.risk_rating as Task['riskRating'],
       owner: task.owner,
       createdAt: new Date(task.created_at),
@@ -188,6 +190,8 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       category: taskData.category,
       sop_link: taskData.sopLink,
       policy_link: taskData.policyLink,
+      sop_document_id: taskData.sopDocumentId,
+      policy_document_id: taskData.policyDocumentId,
       risk_rating: taskData.riskRating,
       owner: taskData.owner,
     };
@@ -257,6 +261,8 @@ export const updateTask = async (taskId: string, updates: Partial<Omit<Task, 'id
       category: updates.category,
       sop_link: updates.sopLink,
       policy_link: updates.policyLink,
+      sop_document_id: updates.sopDocumentId,
+      policy_document_id: updates.policyDocumentId,
       risk_rating: updates.riskRating,
       owner: updates.owner,
     })
@@ -1015,4 +1021,104 @@ export const getGlobalStats = async () => {
       totalStaff: 0,
     };
   }
+};
+
+// ============================================================================
+// DOCUMENT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export interface DocumentReference {
+  id: string;
+  title: string;
+  description?: string;
+  evidence_type: string;
+  status: string;
+  created_at: string;
+}
+
+// Get documents by type (for dropdown selection)
+export const getDocumentsByType = async (type: 'sop' | 'policy'): Promise<DocumentReference[]> => {
+  try {
+    const practiceId = await getCurrentPracticeId();
+    if (!practiceId) {
+      console.error('No practice ID found for document retrieval');
+      return [];
+    }
+
+    let query = supabase
+      .from('evidence_items')
+      .select('id, title, description, evidence_type, status, created_at')
+      .eq('practice_id', practiceId);
+
+    if (type === 'sop') {
+      // For SOPs, look for documents with SOP in title or tags
+      query = query.or('title.ilike.%sop%,title.ilike.%standard operating%,description.ilike.%sop%,description.ilike.%standard operating%');
+    } else {
+      // For policies, look for evidence_type = 'policy' or 'procedure'
+      query = query.in('evidence_type', ['policy', 'procedure']);
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('Error fetching documents:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getDocumentsByType:', error);
+    return [];
+  }
+};
+
+// Get a single document by ID
+export const getDocumentById = async (documentId: string): Promise<DocumentReference | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('evidence_items')
+      .select('id, title, description, evidence_type, status, created_at')
+      .eq('id', documentId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching document by ID:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in getDocumentById:', error);
+    return null;
+  }
+};
+
+// Generate display text for a document link (internal or external)
+export const getDocumentDisplayText = (
+  documentId?: string,
+  documentTitle?: string,
+  externalUrl?: string
+): string => {
+  if (documentId && documentTitle) {
+    return documentTitle;
+  }
+  if (externalUrl) {
+    try {
+      const url = new URL(externalUrl);
+      return url.hostname;
+    } catch {
+      return 'External Link';
+    }
+  }
+  return 'No Link';
+};
+
+// Check if a task has any document links (internal or external)
+export const hasDocumentLinks = (task: Task): { hasSOP: boolean; hasPolicy: boolean } => {
+  return {
+    hasSOP: !!(task.sopDocumentId || task.sopLink),
+    hasPolicy: !!(task.policyDocumentId || task.policyLink)
+  };
 }; 

@@ -23,6 +23,8 @@ export interface Task {
   category: TaskFrequency;
   sopLink?: string;
   policyLink?: string;
+  sopDocumentId?: string;
+  policyDocumentId?: string;
   riskRating: RiskRating;
   competencies: StaffCompetency[];
   owner?: string;

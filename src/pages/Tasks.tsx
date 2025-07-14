@@ -213,6 +213,8 @@ export const Tasks: React.FC = () => {
           category: taskData.category,
           sopLink: taskData.sopLink,
           policyLink: taskData.policyLink,
+          sopDocumentId: taskData.sopDocumentId,
+          policyDocumentId: taskData.policyDocumentId,
           riskRating: taskData.riskRating,
           owner: taskData.owner,
         });
@@ -236,6 +238,8 @@ export const Tasks: React.FC = () => {
           category: taskData.category || 'Daily',
           sopLink: taskData.sopLink,
           policyLink: taskData.policyLink,
+          sopDocumentId: taskData.sopDocumentId,
+          policyDocumentId: taskData.policyDocumentId,
           riskRating: taskData.riskRating || 'Medium',
           owner: taskData.owner,
         }, targetPracticeId);

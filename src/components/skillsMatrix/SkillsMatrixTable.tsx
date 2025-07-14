@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { 
   Table, 
@@ -10,6 +10,7 @@ import {
 } from '../ui/Table';
 import { RiskBadge, CompetencyBadge } from '../ui/Badge';
 import { Task, StaffCompetency, TaskFrequency, RiskRating } from '../../types';
+import { getDocumentById, getDocumentDisplayText, hasDocumentLinks, DocumentReference } from '../../services/dataService';
 
 interface SkillsMatrixTableProps {
   tasks: Task[];
@@ -63,6 +64,35 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
   onTaskClick,
 }) => {
   const [sortState, setSortState] = useState<SortState>({ field: null, direction: 'asc' });
+  const [documentTitles, setDocumentTitles] = useState<Record<string, string>>({});
+
+  // Load document titles for internal document references
+  useEffect(() => {
+    const loadDocumentTitles = async () => {
+      const titles: Record<string, string> = {};
+      
+      for (const task of tasks) {
+        if (task.sopDocumentId) {
+          const doc = await getDocumentById(task.sopDocumentId);
+          if (doc) {
+            titles[task.sopDocumentId] = doc.title;
+          }
+        }
+        if (task.policyDocumentId) {
+          const doc = await getDocumentById(task.policyDocumentId);
+          if (doc) {
+            titles[task.policyDocumentId] = doc.title;
+          }
+        }
+      }
+      
+      setDocumentTitles(titles);
+    };
+
+    if (tasks.length > 0) {
+      loadDocumentTitles();
+    }
+  }, [tasks]);
 
   // Custom sort orders
   const frequencyOrder: Record<TaskFrequency, number> = {
@@ -145,6 +175,57 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
   const findCompetency = (task: Task, staffId: string): StaffCompetency | undefined => {
     return task.competencies.find(comp => comp.staffId === staffId);
   };
+
+  // Handle document link clicks
+  const handleDocumentClick = (task: Task, type: 'sop' | 'policy', e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (type === 'sop') {
+      if (task.sopDocumentId) {
+        // TODO: Open evidence view modal for internal document
+        console.log('Open SOP document:', task.sopDocumentId);
+      } else if (task.sopLink) {
+        // Open external URL
+        window.open(task.sopLink, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      if (task.policyDocumentId) {
+        // TODO: Open evidence view modal for internal document
+        console.log('Open Policy document:', task.policyDocumentId);
+      } else if (task.policyLink) {
+        // Open external URL
+        window.open(task.policyLink, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
+
+  // Get display text for a document link
+  const getDocumentDisplayText = (task: Task, type: 'sop' | 'policy'): string => {
+    if (type === 'sop') {
+      if (task.sopDocumentId) {
+        return documentTitles[task.sopDocumentId] || 'Loading...';
+      } else if (task.sopLink) {
+        try {
+          const url = new URL(task.sopLink);
+          return url.hostname;
+        } catch {
+          return 'External Link';
+        }
+      }
+    } else {
+      if (task.policyDocumentId) {
+        return documentTitles[task.policyDocumentId] || 'Loading...';
+      } else if (task.policyLink) {
+        try {
+          const url = new URL(task.policyLink);
+          return url.hostname;
+        } catch {
+          return 'External Link';
+        }
+      }
+    }
+    return '';
+  };
   
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -202,34 +283,30 @@ export const SkillsMatrixTable: React.FC<SkillsMatrixTableProps> = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex space-x-2">
-                    {task.sopLink && (
-                      <a 
-                        href={task.sopLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-800 inline-flex items-center"
-                        onClick={(e) => e.stopPropagation()}
+                    {(task.sopDocumentId || task.sopLink) && (
+                      <button
+                        onClick={(e) => handleDocumentClick(task, 'sop', e)}
+                        className="text-primary-600 hover:text-primary-800 inline-flex items-center group"
+                        title={`SOP: ${getDocumentDisplayText(task, 'sop')}`}
                       >
                         <span className="sr-only">SOP</span>
-                        <span className="w-6 h-6 flex items-center justify-center rounded-full bg-primary-100 text-primary-800 text-xs font-medium">
+                        <span className="w-6 h-6 flex items-center justify-center rounded-full bg-primary-100 text-primary-800 text-xs font-medium group-hover:bg-primary-200">
                           S
                         </span>
-                      </a>
+                      </button>
                     )}
                     
-                    {task.policyLink && (
-                      <a 
-                        href={task.policyLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-secondary-600 hover:text-secondary-800 inline-flex items-center"
-                        onClick={(e) => e.stopPropagation()}
+                    {(task.policyDocumentId || task.policyLink) && (
+                      <button
+                        onClick={(e) => handleDocumentClick(task, 'policy', e)}
+                        className="text-secondary-600 hover:text-secondary-800 inline-flex items-center group"
+                        title={`Policy: ${getDocumentDisplayText(task, 'policy')}`}
                       >
                         <span className="sr-only">Policy</span>
-                        <span className="w-6 h-6 flex items-center justify-center rounded-full bg-secondary-100 text-secondary-800 text-xs font-medium">
+                        <span className="w-6 h-6 flex items-center justify-center rounded-full bg-secondary-100 text-secondary-800 text-xs font-medium group-hover:bg-secondary-200">
                           P
                         </span>
-                      </a>
+                      </button>
                     )}
                   </div>
                 </TableCell>
