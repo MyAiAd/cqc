@@ -16,17 +16,18 @@ if (!supabaseUrl || !supabaseKey ||
 } else {
   supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
-      // Enable auto refresh but make it less aggressive
+      // More aggressive session persistence
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
       // Use PKCE flow for better security
       flowType: 'pkce',
-      // Reduce the frequency of token refresh checks to minimize tab focus issues
-      // This will refresh tokens less frequently, reducing the chance of refresh on tab focus
+      // Use localStorage for session storage
       storage: window.localStorage,
-      // Don't refresh tokens as aggressively
-      debug: false
+      // Disable debug to reduce noise
+      debug: false,
+      // More aggressive session refresh - refresh before expiry
+      storageKey: 'supabase.auth.token'
     },
     global: {
       headers: {
@@ -36,7 +37,7 @@ if (!supabaseUrl || !supabaseKey ||
     // Reduce the frequency of real-time connection attempts
     realtime: {
       params: {
-        eventsPerSecond: 10
+        eventsPerSecond: 2
       }
     }
   });

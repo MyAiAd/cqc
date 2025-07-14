@@ -50,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Use refs to avoid stale closures in auth state change handler
   const userProfileRef = useRef<UserProfile | null>(null);
   const fetchingProfileRef = useRef<boolean>(false);
+  const lastSignInRef = useRef<number>(0);
 
   // Update refs when state changes
   useEffect(() => {
@@ -205,6 +206,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🔥 AUTH STATE CHANGE - Current Profile:', userProfileRef.current?.email, userProfileRef.current?.role);
     console.log('🔥 AUTH STATE CHANGE - Timestamp:', new Date().toISOString());
     
+    // Check if this is a "fake" SIGNED_IN event that should be treated as a token refresh
+    // This happens when the tab regains focus and Supabase re-establishes the session
+    const now = Date.now();
+    const timeSinceLastSignIn = now - lastSignInRef.current;
+    const isFakeSignIn = event === 'SIGNED_IN' && 
+                         session?.user && 
+                         userProfileRef.current && 
+                         session.user.id === userProfileRef.current.id &&
+                         timeSinceLastSignIn < 60000; // Less than 1 minute since last sign-in
+    
+    if (isFakeSignIn) {
+      console.log('Detected fake SIGNED_IN event - treating as token refresh');
+      console.log('Time since last sign-in:', timeSinceLastSignIn, 'ms');
+      // Just update the user object, don't refetch profile or set loading
+      setUser(session?.user ?? null);
+      console.log('=== AUTH STATE CHANGE COMPLETE (fake sign-in) ===');
+      return;
+    }
+    
+    // Track genuine sign-ins
+    if (event === 'SIGNED_IN') {
+      lastSignInRef.current = now;
+    }
+    
     // Only set loading for significant auth changes, not token refresh
     if (event !== 'TOKEN_REFRESHED') {
       setLoading(true);
@@ -236,17 +261,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
-    let isVisible = !document.hidden;
-
-    // Handle visibility change to prevent unnecessary operations when tab is not visible
-    const handleVisibilityChange = () => {
-      isVisible = !document.hidden;
-      if (isVisible) {
-        console.log('Tab became visible - user returned to app');
-      } else {
-        console.log('Tab became hidden - user switched away');
-      }
-    };
 
     const initialize = async () => {
       // Check Supabase configuration first
@@ -269,25 +283,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
       
-      // Set up auth state change listener with visibility check
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return;
-        
-        // Skip unnecessary operations when tab is not visible (except for sign out)
-        if (!isVisible && event !== 'SIGNED_OUT') {
-          console.log('Skipping auth state change processing - tab not visible');
-          return;
-        }
-        
-        await handleAuthStateChange(event, session);
-      });
-
-      // Add visibility change listener
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+      // Set up auth state change listener
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthStateChange);
 
       return () => {
         mounted = false;
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
         subscription?.unsubscribe();
       };
     };
