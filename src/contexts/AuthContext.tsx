@@ -25,6 +25,7 @@ interface AuthContextType {
   loading: boolean;
   configError: string | null;
   signIn: (email: string) => Promise<{ error?: unknown }>;
+  signInWithPassword: (email: string, password: string) => Promise<{ error?: unknown }>;
   signOut: () => Promise<void>;
   getCurrentPracticeId: () => string | null;
 }
@@ -335,6 +336,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithPassword = async (email: string, password: string) => {
+    try {
+      // Normalize email to lowercase for consistent handling
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      console.log('signInWithPassword called with email:', email);
+      console.log('Normalized email:', normalizedEmail);
+      
+      // Check if Supabase client is properly initialized
+      if (!supabase) {
+        console.error('Supabase client is not initialized');
+        return { error: new Error('Supabase client not initialized') };
+      }
+
+      console.log('Calling supabase.auth.signInWithPassword...');
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password
+      });
+
+      if (error) {
+        console.error('Error in signInWithPassword:', error);
+        return { error };
+      }
+
+      console.log('Password sign-in successful');
+      return { error: null };
+    } catch (error) {
+      console.error('Exception in signInWithPassword:', error);
+      return { error };
+    }
+  };
+
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -362,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     configError,
     signIn,
+    signInWithPassword,
     signOut,
     getCurrentPracticeId,
   };

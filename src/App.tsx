@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
-import { LoginForm } from './components/auth/LoginForm';
+import { EnhancedLoginForm } from './components/auth/EnhancedLoginForm';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { SkillsMatrix } from './pages/SkillsMatrix';
@@ -66,7 +66,7 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginForm />;
+    return <EnhancedLoginForm />;
   }
 
   return (
